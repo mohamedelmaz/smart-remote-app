@@ -134,7 +134,8 @@ const (
 
 // VKNames maps protocol key names to virtual key codes.
 var VKNames = map[string]uint16{
-	"back": vkBack, "tab": vkTab, "enter": vkEnter, "return": vkEnter,
+	"back": vkBack, "backspace": vkBack, "bksp": vkBack,
+	"tab": vkTab, "enter": vkEnter, "return": vkEnter,
 	"shift": vkShift, "ctrl": vkControl, "control": vkControl, "alt": vkMenu,
 	"esc": vkEscape, "escape": vkEscape, "space": vkSpace, "del": vkDelete,
 	"delete": vkDelete, "insert": vkInsert, "home": vkHome, "end": vkEnd,
@@ -317,10 +318,20 @@ func (in *Injector) tapVirtualKey(vk uint16) error {
 }
 
 // TapKey presses and releases the named virtual key.
+//
+// It resolves through [resolveKey] rather than reading VKNames directly. That
+// indirection is what makes a bare letter work: "d" is not in VKNames, because
+// that table deliberately lists only *named* keys, but resolveKey falls through
+// to letterKey and returns the D virtual key.
+//
+// Reading VKNames directly here - as this used to - meant every single-letter
+// key was rejected with `unknown key "d"`. That is not a rare edge case: the
+// chord path already accepted letters, so Win+D worked while a plain tap of "d"
+// did not, which made the protocol look inconsistent for no visible reason.
 func (in *Injector) TapKey(name string) error {
-	vk, ok := VKNames[low(name)]
-	if !ok {
-		return fmt.Errorf("remote: unknown key %q", name)
+	vk, err := resolveKey(name)
+	if err != nil {
+		return err
 	}
 	return in.tapVirtualKey(vk)
 }

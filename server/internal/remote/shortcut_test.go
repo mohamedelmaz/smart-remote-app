@@ -1,6 +1,9 @@
 package remote
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestShortcutsResolveToRealWindowsChords pins the compound shortcuts the app
 // offers against the protocol's key names.
@@ -81,6 +84,128 @@ func TestShortcutsResolveToRealWindowsChords(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestTapKeyAcceptsEveryNameResolveKeyAccepts guards the tap path.
+//
+// TapKey used to look names up in VKNames directly, which meant a bare letter
+// was rejected with `unknown key "d"` even though the chord path resolved it
+// fine. The two halves of the protocol therefore disagreed about which names
+// were valid, and the difference only showed up at runtime as a toast on the
+// phone.
+//
+// resolveKey is the single authority on key names; this asserts the tap path
+// agrees with it for every name the protocol accepts.
+func TestTapKeyAcceptsEveryNameResolveKeyAccepts(t *testing.T) {
+	names := []string{
+		// Named keys.
+		"enter", "tab", "esc", "space", "back", "backspace", "del", "insert",
+		"home", "end", "pageup", "pagedown", "up", "down", "left", "right",
+		"f1", "f5", "f12", "mute", "volup", "voldown", "mediaprev",
+		// Modifiers.
+		"win", "ctrl", "alt", "shift",
+		// Bare letters and digits - the case that used to fail.
+		"a", "d", "e", "l", "q", "r", "s", "z", "0", "5", "9",
+		// Upper case resolves to the same key.
+		"D", "S", "Z",
+	}
+
+	for _, name := range names {
+		want, err := resolveKey(name)
+		if err != nil {
+			t.Errorf("resolveKey(%q) failed: %v", name, err)
+			continue
+		}
+		// TapKey would return "unknown key" here if it still consulted only
+		// VKNames. Injecting the key is safe: the failure we care about
+		// happens before any input is sent.
+		if err := (&Injector{}).TapKey(name); err != nil {
+			t.Errorf("TapKey(%q) = %v, but resolveKey accepts it as VK_%X",
+				name, err, want)
+		}
+	}
+}
+
+// TestTapKeyStillRejectsGenuinelyUnknownNames makes sure the fix did not turn
+// the tap path into an accept-anything parser. A name that resolves to nothing
+// must still be refused with the same message the user saw before.
+func TestTapKeyStillRejectsGenuinelyUnknownNames(t *testing.T) {
+	for _, name := range []string{"", "notakey", "ctrl+alt", "hello world"} {
+		err := (&Injector{}).TapKey(name)
+		if err == nil {
+			t.Errorf("TapKey(%q) succeeded; it should be rejected", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), "unknown key") {
+			t.Errorf("TapKey(%q) = %v, want an \"unknown key\" error", name, err)
+		}
+	}
+}
+
+// TestDefaultMacrosUseModsForChords guards the built-in deck.
+//
+// A chord must be split into Mods (held) and Keys (the trigger). Listing the
+// whole chord in Keys with no Mods is read as two sequential taps - tap Win,
+// then tap L - and a bare Win tap does nothing on its own, so the button
+// silently failed. Every multi-key macro must therefore either use Mods or be a
+// genuinely sequential macro, which this project does not currently ship.
+func TestDefaultMacrosUseModsForChords(t *testing.T) {
+	for _, m := range DefaultMacros() {
+		if m.Kind != MacroKindKeys {
+			continue
+		}
+		if len(m.Keys) > 1 && len(m.Mods) == 0 {
+			t.Errorf("macro %q lists %v in Keys with no Mods; it would be "+
+				"tapped as separate keys rather than as one chord",
+				m.ID, m.Keys)
+		}
+		if len(m.Mods) > 0 && len(m.Keys) == 0 {
+			t.Errorf("macro %q has Mods %v but no trigger key", m.ID, m.Mods)
+		}
+	}
+}
+
+// TestDefaultMacroKeysResolve checks that every key named in a built-in macro
+// is one the protocol can actually resolve.
+//
+// This is the regression test for the "remote: unknown key" toast: a macro
+// naming a key the server does not know fails at the moment the user taps it,
+// on the PC, with no way to test it beforehand. Resolving every name here turns
+// that into a build-time failure.
+func TestDefaultMacroKeysResolve(t *testing.T) {
+	for _, m := range DefaultMacros() {
+		if m.Kind != MacroKindKeys {
+			continue
+		}
+		for _, name := range m.Mods {
+			if _, err := resolveKey(name); err != nil {
+				t.Errorf("macro %q: unknown modifier %q: %v", m.ID, name, err)
+			}
+		}
+		for _, name := range m.Keys {
+			if _, err := resolveKey(name); err != nil {
+				t.Errorf("macro %q: unknown key %q: %v", m.ID, name, err)
+			}
+		}
+	}
+}
+
+// TestBackspaceIsAKnownKeyName pins the name the mobile keyboard sends.
+//
+// Deleting from the phone keyboard sends key.tap with "backspace". VKNames only
+// listed "back", so the edit was rejected as an unknown key and the deletion
+// silently did nothing - the user saw the character stay put.
+func TestBackspaceIsAKnownKeyName(t *testing.T) {
+	for _, name := range []string{"back", "backspace", "bksp"} {
+		vk, err := resolveKey(name)
+		if err != nil {
+			t.Errorf("resolveKey(%q) = %v", name, err)
+			continue
+		}
+		if vk != vkBack {
+			t.Errorf("resolveKey(%q) = VK_%X, want VK_%X (backspace)", name, vk, vkBack)
+		}
 	}
 }
 

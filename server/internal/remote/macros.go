@@ -47,18 +47,61 @@ type MacroStore struct {
 }
 
 // DefaultMacros returns the built-in deck shipped with the app.
+//
+// A chord macro must split into Mods (held for the whole sequence) and Keys
+// (the trigger, tapped last). Listing the whole chord in Keys with no Mods -
+// Keys: ["win", "l"] - was read as two sequential taps: tap Win, then tap L.
+// A bare Win tap does nothing on its own and swallows the following key, so the
+// macro appeared to do nothing at all, and on some layouts the second tap
+// arrived as a stray character.
+//
+// The pairs below are taken from Microsoft's documented Windows shortcuts so
+// every button does what its label says.
 func DefaultMacros() []Macro {
 	return []Macro{
-		{ID: "lock", Label: "Lock", Icon: "lock", Kind: MacroKindKeys, Keys: []string{"win", "l"}, BuiltIn: true},
-		{ID: "sleep", Label: "Sleep", Icon: "moon", Kind: MacroKindKeys, Keys: []string{"win", "x"}, BuiltIn: true},
-		{ID: "spotify", Label: "Spotify", Icon: "music", Kind: MacroKindKeys, Keys: []string{"ctrl", "alt", "s"}, BuiltIn: true},
-		{ID: "mute", Label: "Mute", Icon: "volume_off", Kind: MacroKindKeys, Keys: []string{"mute"}, BuiltIn: true},
-		{ID: "copy", Label: "Copy", Icon: "content_copy", Kind: MacroKindKeys, Keys: []string{"ctrl", "c"}, BuiltIn: true},
-		{ID: "paste", Label: "Paste", Icon: "content_paste", Kind: MacroKindKeys, Keys: []string{"ctrl", "v"}, BuiltIn: true},
-		{ID: "explorer", Label: "Files", Icon: "folder", Kind: MacroKindKeys, Keys: []string{"win", "e"}, BuiltIn: true},
-		{ID: "desktop", Label: "Desktop", Icon: "desktop", Kind: MacroKindKeys, Keys: []string{"win", "d"}, BuiltIn: true},
-		{ID: "taskmgr", Label: "Task Mgr", Icon: "monitor", Kind: MacroKindKeys, Keys: []string{"ctrl", "shift", "esc"}, BuiltIn: true},
-		{ID: "open_files", Label: "Open Files", Icon: "terminal", Kind: MacroKindShell, Shell: "explorer.exe", BuiltIn: true},
+		// Win+L locks the workstation. Windows only.
+		{ID: "lock", Label: "Lock", Icon: "lock", Kind: MacroKindKeys,
+			Mods: []string{"win"}, Keys: []string{"l"}, BuiltIn: true},
+		// Win+X opens the Power User menu; U then I is shut down, but a
+		// single chord cannot express a sequence, so this is left as the
+		// menu itself rather than a destructive two-step action.
+		{ID: "sleep", Label: "Power Menu", Icon: "moon", Kind: MacroKindKeys,
+			Mods: []string{"win"}, Keys: []string{"x"}, BuiltIn: true},
+		// Ctrl+Alt+S is not a Windows shortcut. Spotify's own global hotkey
+		// is user-configurable, so launching it is the only reliable action.
+		{ID: "spotify", Label: "Spotify", Icon: "music", Kind: MacroKindShell,
+			Shell: "spotify.exe", BuiltIn: true},
+		{ID: "mute", Label: "Mute", Icon: "volume_off", Kind: MacroKindKeys,
+			Keys: []string{"mute"}, BuiltIn: true},
+		// Ctrl+C / Ctrl+V are documented text-editing shortcuts.
+		{ID: "copy", Label: "Copy", Icon: "content_copy", Kind: MacroKindKeys,
+			Mods: []string{"ctrl"}, Keys: []string{"c"}, BuiltIn: true},
+		{ID: "paste", Label: "Paste", Icon: "content_paste", Kind: MacroKindKeys,
+			Mods: []string{"ctrl"}, Keys: []string{"v"}, BuiltIn: true},
+		{ID: "cut", Label: "Cut", Icon: "content_cut", Kind: MacroKindKeys,
+			Mods: []string{"ctrl"}, Keys: []string{"x"}, BuiltIn: true},
+		{ID: "undo", Label: "Undo", Icon: "undo", Kind: MacroKindKeys,
+			Mods: []string{"ctrl"}, Keys: []string{"z"}, BuiltIn: true},
+		// Win+E opens File Explorer.
+		{ID: "explorer", Label: "Files", Icon: "folder", Kind: MacroKindKeys,
+			Mods: []string{"win"}, Keys: []string{"e"}, BuiltIn: true},
+		// Win+D shows the desktop.
+		{ID: "desktop", Label: "Desktop", Icon: "desktop", Kind: MacroKindKeys,
+			Mods: []string{"win"}, Keys: []string{"d"}, BuiltIn: true},
+		// Ctrl+Shift+Esc opens Task Manager directly, with no UAC prompt.
+		{ID: "taskmgr", Label: "Task Mgr", Icon: "monitor", Kind: MacroKindKeys,
+			Mods: []string{"ctrl", "shift"}, Keys: []string{"esc"}, BuiltIn: true},
+		// Win+I opens Settings.
+		{ID: "settings", Label: "Settings", Icon: "settings", Kind: MacroKindKeys,
+			Mods: []string{"win"}, Keys: []string{"i"}, BuiltIn: true},
+		// Win+R opens the Run dialog.
+		{ID: "run", Label: "Run", Icon: "terminal", Kind: MacroKindKeys,
+			Mods: []string{"win"}, Keys: []string{"r"}, BuiltIn: true},
+		// Win+Shift+S starts a Snip & Sketch region capture.
+		{ID: "snip", Label: "Snip", Icon: "crop_free", Kind: MacroKindKeys,
+			Mods: []string{"win", "shift"}, Keys: []string{"s"}, BuiltIn: true},
+		{ID: "open_files", Label: "Open Files", Icon: "folder", Kind: MacroKindShell,
+			Shell: "explorer.exe", BuiltIn: true},
 	}
 }
 

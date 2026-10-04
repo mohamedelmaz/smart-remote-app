@@ -187,6 +187,27 @@ const List<_Shortcut> _shortcutSpecs = [
     mods: ['ctrl'],
     key: 's',
   ),
+  _Shortcut(
+    en: 'Search',
+    ar: 'بحث',
+    icon: Icons.search,
+    mods: ['win'],
+    key: 's',
+  ),
+  _Shortcut(
+    en: 'Action Center',
+    ar: 'مركز الإشعارات',
+    icon: Icons.notifications,
+    mods: ['win'],
+    key: 'a',
+  ),
+  _Shortcut(
+    en: 'Active Apps',
+    ar: 'التطبيقات المفتوحة',
+    icon: Icons.apps,
+    mods: ['win'],
+    key: 'tab',
+  ),
 ];
 
 /// Media transport, volume and quick desktop shortcuts.

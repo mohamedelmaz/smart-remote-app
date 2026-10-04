@@ -64,6 +64,13 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+# Release artefacts. These are copied out of mobile/build after a release build
+# so they are easy to find and sideload, but a 50MB APK per commit bloats the
+# history without adding anything a rebuild cannot reproduce.
+release.apk
+server/smart-remote-app.exe
+server/smart-remote-test.exe
+
 # ---------------------------------------------------------------------------
 # Personal scratch files
 # ---------------------------------------------------------------------------

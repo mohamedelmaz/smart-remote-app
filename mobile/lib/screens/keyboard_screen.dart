@@ -9,6 +9,86 @@ import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
 import 'pairing_screen.dart';
 
+/// What to send to the PC so its text matches [next].
+///
+/// The PC receives Backspace presses and literal text, never a full rewrite, so
+/// every edit has to be expressed as "erase this much, then type this". Getting
+/// that wrong is not a cosmetic problem: typing text that is already on the PC
+/// duplicates it, which is exactly the bug this class exists to prevent.
+///
+/// THE DELETION BUG THIS FIXES
+/// --------------------------
+/// The original code computed the number of backspaces correctly and then
+/// *also* re-sent the entire surviving text. So deleting one character from
+/// "hello" sent: one Backspace, then "hell". The PC had "hello", erased the last
+/// "o" to "hell", and then had "hell" typed onto it again - producing "hellhell".
+/// The user saw their text doubling instead of disappearing, and no error was
+/// ever shown because every command succeeded.
+///
+/// The rule that fixes it: after a pure deletion, the text that remains on the
+/// PC is already correct, so nothing may be typed. Backspaces alone are the
+/// whole action.
+class NativeTextDiff {
+  const NativeTextDiff._({
+    required this.backspaces,
+    required this.text,
+  });
+
+  /// Builds the plan that turns [previous] (what the PC already has) into
+  /// [next] (what the field now holds).
+  factory NativeTextDiff(String previous, String next) {
+    // Append: the common case, and the only one that needs no erasing.
+    if (next.startsWith(previous)) {
+      return NativeTextDiff._(
+        backspaces: 0,
+        text: next.substring(previous.length),
+      );
+    }
+
+    // Pure deletion or replacement from the end. Everything after the shared
+    // prefix is removed and nothing replaces it, so no text is sent.
+    //
+    // Note the >= rather than >: an empty `next` is a strict prefix of any
+    // non-empty `previous`, and clearing the field is just a backspace run.
+    if (previous.startsWith(next)) {
+      return NativeTextDiff._(
+        backspaces: previous.length - next.length,
+        text: '',
+      );
+    }
+
+    // Mid-text edit: rewind to the shared prefix and retype only the tail.
+    final common = _commonPrefix(previous, next);
+    return NativeTextDiff._(
+      backspaces: previous.length - common,
+      text: next.substring(common),
+    );
+  }
+
+  /// How many Backspace presses the PC needs.
+  final int backspaces;
+
+  /// The literal text to type afterwards. Empty when only erasing is needed.
+  final String text;
+
+  /// True when the edit needs neither a backspace nor any text.
+  bool get isNoop => backspaces == 0 && text.isEmpty;
+
+  /// Length of the shared prefix of [a] and [b].
+  static int _commonPrefix(String a, String b) {
+    final limit = a.length < b.length ? a.length : b.length;
+    var i = 0;
+    while (i < limit && a.codeUnitAt(i) == b.codeUnitAt(i)) {
+      i++;
+    }
+    return i;
+  }
+
+  @override
+  String toString() =>
+      'NativeTextDiff(backspaces: $backspaces, text: "${text.replaceAll('\n', r'\n')}")';
+}
+
 /// Which on-screen keyboard the user is typing with.
 enum KeyboardMode {
   /// The app's own grid of keys.
@@ -145,41 +225,27 @@ class _KeyboardScreenState extends ConsumerState<KeyboardScreen>
   /// A deletion is sent as a Backspace so the PC's cursor moves back, which is
   /// what makes the native keyboard genuinely usable for editing rather than
   /// append-only.
+  ///
+  /// The diff itself lives in [NativeTextDiff] so it can be tested directly. It
+  /// used to be inlined here, which meant the deletion bug below could only be
+  /// reproduced by driving the real UI and a real socket - neither of which a
+  /// unit test can do.
   void _onNativeChanged(String value) {
     final remote = ref.read(remoteProvider);
     if (remote == null) return;
 
-    final previous = _sentNativeText;
-    if (value.startsWith(previous)) {
-      final added = value.substring(previous.length);
-      if (added.isNotEmpty) {
-        _sentNativeText = value;
-        _report(() => remote.typeText(added));
-      }
-      return;
-    }
-
-    // The field was edited in the middle, which no keystroke-by-keystroke
-    // scheme can represent. Fall back to rewinding and retyping, which is
-    // slow but correct.
-    final backspaces = previous.length - _commonPrefixLength(previous, value);
+    final plan = NativeTextDiff(_sentNativeText, value);
     _sentNativeText = value;
+    if (plan.isNoop) return;
+
     _report(() async {
-      for (var i = 0; i < backspaces; i++) {
+      for (var i = 0; i < plan.backspaces; i++) {
         await remote.tapKey('backspace');
       }
-      return value.isEmpty ? const Ack(ok: true) : remote.typeText(value);
+      return plan.text.isEmpty
+          ? const Ack(ok: true)
+          : remote.typeText(plan.text);
     });
-  }
-
-  /// Length of the shared prefix of [a] and [b].
-  int _commonPrefixLength(String a, String b) {
-    final limit = a.length < b.length ? a.length : b.length;
-    var i = 0;
-    while (i < limit && a.codeUnitAt(i) == b.codeUnitAt(i)) {
-      i++;
-    }
-    return i;
   }
 
   /// Runs an action and surfaces any failure to the user.

@@ -95,7 +95,16 @@ func run(addr, pin, command, key string) error {
 	fmt.Printf("RESULT: authentication ACCEPTED (nonce echoed: %q)\n", ack.Nonce)
 
 	if command != "" {
-		cmd := map[string]any{"type": command, "key": key, "nonce": "probe-2"}
+		cmd := map[string]any{"type": command, "nonce": "probe-2"}
+		// macro.run names its target in "macroId", not "key". Putting the
+		// value in "key" only produced `macro.run requires 'macroId'`,
+		// which reads like a server fault when it is really the probe
+		// writing to the wrong field.
+		if command == "macro.run" {
+			cmd["macroId"] = key
+		} else {
+			cmd["key"] = key
+		}
 		frame, _ := json.Marshal(cmd)
 		if err := writeFrame(conn, frame); err != nil {
 			return fmt.Errorf("sending command: %w", err)
