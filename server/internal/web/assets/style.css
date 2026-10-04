@@ -1,0 +1,244 @@
+:root {
+  --bg: #0A0E1A;
+  --accent: #00E5FF;
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.10);
+  --success: #00FF88;
+  --warning: #FF9500;
+  --error: #FF4444;
+  --text: #FFFFFF;
+  --text-2: #8899AA;
+  --radius: 16px;
+  --transition: 200ms ease-in-out;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+/* ---- Top bar ---- */
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+
+.brand h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* The dot is decorative; the adjacent text carries the meaning, so status
+   is never conveyed by colour alone. */
+.brand-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 20px var(--accent);
+}
+
+.status-strip { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.pill .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: background var(--transition), box-shadow var(--transition);
+}
+
+.pill[data-state="ok"] { color: var(--text); border-color: rgba(0, 255, 136, 0.35); }
+.pill[data-state="ok"] .dot { background: var(--success); box-shadow: 0 0 10px var(--success); }
+.pill[data-state="warn"] .dot { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
+.pill[data-state="bad"] .dot { background: var(--error); box-shadow: 0 0 10px var(--error); }
+
+/* ---- Layout ---- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.card {
+  position: relative;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(16px);
+  transition: border-color var(--transition), transform var(--transition);
+}
+
+.card:hover { border-color: rgba(0, 229, 255, 0.28); }
+
+.card h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.card-pin { grid-row: span 2; }
+
+.hint { margin: 0 0 16px; font-size: 13px; color: var(--text-2); }
+.hint strong { color: var(--text); }
+
+/* ---- PIN ---- */
+.pin {
+  display: block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: clamp(44px, 9vw, 68px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-align: center;
+  color: var(--accent);
+  text-shadow: 0 0 28px rgba(0, 229, 255, 0.45);
+  padding: 24px 0 12px;
+  user-select: all;
+}
+
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.note { min-height: 20px; margin: 12px 0 0; font-size: 13px; color: var(--accent); }
+.note.danger { color: var(--error); }
+
+
+/* ---- Buttons ---- */
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn-primary {
+  background: rgba(0, 229, 255, 0.14);
+  border-color: rgba(0, 229, 255, 0.45);
+  color: var(--accent);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.16);
+}
+
+.btn-primary:hover { box-shadow: 0 0 26px rgba(0, 229, 255, 0.34); }
+.btn-small { padding: 7px 14px; font-size: 13px; }
+
+/* ---- Key/value lists ---- */
+.kv { margin: 0; display: grid; gap: 10px; }
+.kv > div { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+.kv dt { color: var(--text-2); font-size: 13px; }
+.kv dd { margin: 0; font-size: 14px; text-align: right; word-break: break-all; }
+
+.advice { margin: 16px 0 0; padding-left: 18px; color: var(--warning); font-size: 13px; }
+.advice:empty { display: none; }
+.advice li { margin-bottom: 6px; }
+
+.status-line { margin: 0; font-size: 15px; font-weight: 600; }
+.status-line.ok { color: var(--success); }
+.status-line.bad { color: var(--error); }
+
+/* ---- Macros ---- */
+.card-macros .btn { margin-bottom: 14px; }
+
+.macro-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.macro-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--glass-strong);
+  border: 1px solid var(--border);
+  transition: border-color var(--transition);
+}
+
+.macro-item:hover { border-color: rgba(0, 229, 255, 0.35); }
+
+/* The label is the authoritative identifier; the icon is decorative and may
+   fail to render, so it is never the only signal. */
+.macro-item .label { font-size: 14px; font-weight: 600; }
+.macro-item .kind { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---- Footer ---- */
+.foot {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .shell { padding: 24px 16px 36px; }
+  .card { padding: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

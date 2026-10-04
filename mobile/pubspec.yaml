@@ -1,0 +1,71 @@
+name: smart_remote
+# Kept in step with what the app actually ships: touchpad, media, macros,
+# keyboard, screen view and voice. Gamepad input is not implemented (no
+# controller-capture dependency is wired up), so it is not claimed here.
+description: "Control your Windows PC from your phone: touchpad, media, macros, keyboard, screen view and voice."
+publish_to: 'none'
+version: 1.0.0+1
+
+# Shown in the About sheet. Kept in sync with server/internal/remote/brand.go
+# so the phone and the PC never disagree about who ships this.
+developer: elmamo
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management, used through the code-generation-free provider API so
+  # the project builds without a build_runner step.
+  flutter_riverpod: ^2.6.1
+
+  # Networking: WebSocket for the low-latency command channel, HTTP for the
+  # REST API and the MJPEG frame stream.
+  web_socket_channel: ^3.0.1
+  http: ^1.2.2
+
+  # Discovery: Bonjour-style mDNS browsing for automatic device detection.
+  multicast_dns: ^0.3.2
+
+  # Voice: microphone capture streamed to the PC.
+  record: ^5.2.0
+  permission_handler: ^11.3.1
+
+  # Persistence for paired devices and settings.
+  shared_preferences: ^2.3.2
+
+  # Connectivity awareness, so the UI can report "reconnecting" honestly.
+  connectivity_plus: ^6.1.0
+
+  # Fonts: Inter for UI text, JetBrains Mono for codes and numbers. Both have
+  # system fallbacks in the theme, so a font load failure degrades gracefully.
+  google_fonts: ^6.2.1
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# record_linux is only compiled for the Linux target and is never used on
+# Android, but the Dart kernel snapshot still compiles it. Pub resolves it to
+# 0.7.2, which declares record_platform_interface ^1.0.2 -- a range that
+# happily accepts 1.6.0, where startStream gained its final signature.
+# 0.7.2 never implemented it, so `flutter build` fails on an interface method
+# the app never calls. Pinning 1.3.1 satisfies ^1.5.0 and implements
+# startStream, so the whole dependency set compiles.
+dependency_overrides:
+  record_linux: 1.3.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # The brand logo, shown on the pairing screen and in the About sheet.
+    # Sourced from assets-smart remote/smart-remote-logo.jpg and regenerated
+    # into the Windows .ico by server/tools/mkicon, so both platforms show the
+    # same mark. See server/tools/mkicon for the icon build step.
+    - assets/branding/smart-remote-logo.jpg
