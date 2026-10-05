@@ -28,6 +28,20 @@ type TrayConfig struct {
 	// responsible for calling UpdatePIN once the new value is known.
 	OnRegenerate func() string
 
+	// OnToggleStartup is called when the user ticks or unticks the startup
+	// item. It receives the state the user is asking for and returns the state
+	// that actually took effect.
+	//
+	// The indirection exists for the same reason as OnQuit: main owns the
+	// logger and the decision about whether the change is allowed, so the tray
+	// never touches the registry itself. That also lets the menu label be
+	// refreshed from the real outcome rather than from what was clicked.
+	OnToggleStartup func(enabled bool) bool
+
+	// StartupEnabled is the current registration state, used to render the
+	// initial label and tick.
+	StartupEnabled bool
+
 	// Logger receives diagnostics. Must not be nil.
 	Logger *log.Logger
 }
@@ -91,6 +105,22 @@ func onTrayReady(cfg TrayConfig) {
 	mRegen := systray.AddMenuItem("New PIN", "Generate a new pairing PIN")
 
 	systray.AddSeparator()
+
+	// "Run on Windows Startup".
+	//
+	// It is a check item, so the tick reflects the real registry state at the
+	// moment the menu is opened rather than what the user last asked for. A
+	// mismatch here is worse than no tick at all: the user would tick it off
+	// believing autostart was disabled while the app starts anyway.
+	startupItem := systray.AddMenuItem(
+		startupLabel(cfg.StartupEnabled),
+		"Start Smart Remote automatically when Windows starts")
+	// systray exposes Check and Uncheck separately rather than Check(bool), so
+	// the two states are set through one helper to keep the branch in a single
+	// place.
+	startupItem.Uncheck()
+	setStartupCheck(startupItem, cfg.StartupEnabled)
+
 	mQuit := systray.AddMenuItem("Quit", "Exit Smart Remote")
 
 	go func() {
@@ -113,6 +143,21 @@ func onTrayReady(cfg TrayConfig) {
 					pinItem.SetTitle(fmt.Sprintf("PIN: %s", pin))
 					cfg.Logger.Printf("tray: PIN regenerated")
 				}
+			case <-startupItem.ClickedCh:
+				if cfg.OnToggleStartup == nil {
+					continue
+				}
+				// Ask for the opposite of the state we believe we are in,
+				// then adopt whatever the registry actually says afterwards.
+				// Reporting success without checking would leave the tick
+				// lying whenever the write failed - for example on a PC where
+				// policy forbids per-user autostart.
+				want := !startupItem.Checked()
+				actual := cfg.OnToggleStartup(want)
+
+				setStartupCheck(startupItem, actual)
+				startupItem.SetTitle(startupLabel(actual))
+
 			case <-mQuit.ClickedCh:
 				cfg.Logger.Printf("tray: quit requested")
 				if cfg.OnQuit != nil {
@@ -123,6 +168,32 @@ func onTrayReady(cfg TrayConfig) {
 			}
 		}
 	}()
+}
+
+// setStartupCheck applies the tick state to the startup menu item.
+//
+// systray's Check and Uncheck are separate zero-argument calls, so this is the
+// one place the branch lives; calling them directly at each site invites the two
+// to be swapped by mistake, which would invert the meaning of the menu.
+func setStartupCheck(item *systray.MenuItem, enabled bool) {
+	if enabled {
+		item.Check()
+		return
+	}
+	item.Uncheck()
+}
+
+// startupLabel renders the menu item for the current registration state.
+//
+// The word changes with the state rather than staying "Run on Windows Startup",
+// so the item describes what clicking it will do. A fixed label next to a tick
+// makes the two contradict each other: a ticked "Run on..." reads as though
+// clicking would disable it, which is not what a check item does.
+func startupLabel(enabled bool) string {
+	if enabled {
+		return "Disable: start with Windows"
+	}
+	return "Run on Windows Startup"
 }
 
 // TrayStarted reports whether the tray icon was successfully created.

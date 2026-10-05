@@ -81,6 +81,15 @@ _flutter.txt
 server/_s.txt
 mobile/_analyze.txt
 
+# Transient output written by the icon and build tooling while inspecting
+# intermediate results. Matched as a group so a new one never has to be
+# registered here by hand.
+#
+# No "!" exemption is needed for the notes above: they are already ignored on
+# their own lines, and a "!" line would un-ignore them - the opposite of what is
+# wanted. The glob sits below them for exactly that ordering reason.
+_[a-zA-Z0-9]*.txt
+
 # ---------------------------------------------------------------------------
 # Test / coverage artefacts
 # ---------------------------------------------------------------------------

@@ -1,4 +1,15 @@
 // Command smart-remote-server runs the PC-side remote control server.
+//
+// The executable is a tray application, not a console program: it has no window,
+// no title bar and nothing to type into. Everything the user needs is on the
+// tray icon or on the web dashboard. See build.ps1 for the release build.
+//
+// This is declared with the windowsgui build tag so `go build` alone produces
+// the correct subsystem. Without it the default is console, and Windows
+// allocates a black console window for the server that sits on top of
+// everything else until the user closes it - including a window that follows
+// the mouse when it is dragged, which is both ugly and alarming to a user who
+// did not ask for a window at all.
 package main
 
 import (
@@ -214,6 +225,21 @@ func main() {
 				return ""
 			}
 			return newPin
+		},
+		// The registry is read here rather than in the tray so the log records
+		// every change and a failed write is explained to the user, and the
+		// state handed back is re-read from the registry so the menu tick can
+		// never claim something that did not happen.
+		StartupEnabled: remote.StartupEnabled(),
+		OnToggleStartup: func(enabled bool) bool {
+			if err := remote.SetStartup(enabled, logger); err != nil {
+				logger.Printf("WARNING: startup change failed: %v", err)
+				// Re-read rather than assuming the previous state: the write
+				// may have partly succeeded, and guessing would leave the tick
+				// disagreeing with the registry.
+				return remote.StartupEnabled()
+			}
+			return remote.StartupEnabled()
 		},
 	})
 
