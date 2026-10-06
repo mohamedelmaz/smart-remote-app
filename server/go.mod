@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/getlantern/systray v1.2.2
 	github.com/grandcat/zeroconf v1.0.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
@@ -22,5 +23,4 @@ require (
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550 // indirect
 	golang.org/x/net v0.0.0-20200114155413-6afb5195e5aa // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 )

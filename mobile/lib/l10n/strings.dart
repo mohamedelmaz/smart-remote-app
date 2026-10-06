@@ -115,21 +115,14 @@ class T {
   String get notAccepted => text('The PC did not accept it', 'لم يقبل الحاسوب الأمر');
   String get macroFailed => text('Macro failed', 'فشل تنفيذ الاختصار');
 
-  String get step1Title => text('Run the server on your PC',
-      'شغّل الخادم على حاسوبك');
-  String get step1Body => text(
-      'Start smart-remote on the PC. It shows a PIN on its dashboard.',
-      'شغّل smart-remote على الحاسوب. سيعرض رمز دخول في لوحته.');
-  String get step2Title => text('Connect to the same Wi-Fi',
-      'اتصل بنفس شبكة الواي-فاي');
-  String get step2Body => text(
-      'Both devices must be on the same local network.',
-      'يجب أن يكون الجهازان على نفس الشبكة المحلية.');
-  String get step3Title => text('Enter the IP and PIN',
-      'أدخل عنوان IP ورمز الدخول');
-  String get step3Body => text(
-      'Type the PC address shown on the dashboard, then the PIN.',
-      'اكتب عنوان الحاسوب الظاهر في اللوحة، ثم رمز الدخول.');
+  String get howToUseBody => text(
+        '1. Run the server on the computer.\n'
+        '2. Make sure both devices are connected to the same Wi-Fi network.\n'
+        '3. Enter the IP address and PIN to connect.',
+        '1. شغّل الخادم على الكمبيوتر.\n'
+        '2. تأكد من اتصال كلا الجهازين بنفس شبكة Wi-Fi.\n'
+        '3. أدخل عنوان IP ورمز PIN للاتصال.',
+      );
 
   String get aboutBody => text(
       'Smart Remote Control v1.0.0. Developed by elmamo. A professional, '
@@ -149,7 +142,7 @@ class T {
   String get arabic => text('العربية', 'العربية');
   String get english => text('English', 'English');
   String get stepsTitle => text('Three steps to connect', 'ثلاث خطوات للاتصال');
-  String get aboutTitle => text('About this app', 'حول التطبيق');
+  String get aboutTitle => text('About', 'حول المشروع');
   String get developedBy => text('Developed by', 'طوّره');
   String get version => text('Version', 'الإصدار');
 }

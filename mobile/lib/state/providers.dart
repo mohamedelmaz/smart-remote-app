@@ -10,7 +10,10 @@ import '../models/pairing.dart';
 
 /// Stores the current pairing and rebuilds the link when it changes.
 class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
-  PairingNotifier() : super(const AsyncValue.data(null));
+  PairingNotifier({required this.onLinkChanged})
+    : super(const AsyncValue.data(null));
+
+  final void Function() onLinkChanged;
 
   RemoteLink? _link;
   Timer? _statusTimer;
@@ -71,6 +74,7 @@ class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
     _statusTimer = null;
     await _link?.dispose();
     _link = null;
+    onLinkChanged();
 
     final prefs = await SharedPreferences.getInstance();
     await Pairing.clear(prefs);
@@ -91,6 +95,7 @@ class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
 
     final link = RemoteLink(host: pairing.host, port: pairing.port);
     _link = link;
+    onLinkChanged();
 
     // Poll status while paired so the header can show client count, input
     // blocking and stream busy state without a server push for each.
@@ -113,14 +118,42 @@ class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
 /// The pairing state and the live control link.
 final pairingProvider =
     StateNotifierProvider<PairingNotifier, AsyncValue<Pairing?>>(
-  (ref) => PairingNotifier(),
-);
+      (ref) => PairingNotifier(
+        onLinkChanged: () {
+          ref.read(remoteLinkGenerationProvider.notifier).state++;
+        },
+      ),
+    );
+
+/// Changes whenever the active RemoteLink instance is replaced.
+final remoteLinkGenerationProvider = StateProvider<int>((ref) => 0);
 
 /// The active control link, or null when not paired.
 final remoteLinkProvider = Provider<RemoteLink?>((ref) {
   // Watching the pairing keeps this in sync with pair and unpair.
   ref.watch(pairingProvider);
+  // Pairing state may be unchanged while reconnect() replaces the socket link.
+  ref.watch(remoteLinkGenerationProvider);
   return ref.read(pairingProvider.notifier).link;
+});
+
+/// Live lifecycle state for the active control socket.
+///
+/// The pairing can remain unchanged while the socket drops and reconnects, so
+/// screens that only watch [remoteLinkProvider] otherwise keep stale controls.
+final remoteLinkStateProvider = StreamProvider.autoDispose<LinkState>((ref) {
+  final link = ref.watch(remoteLinkProvider);
+  if (link == null) return Stream.value(LinkState.idle);
+
+  return Stream<LinkState>.multi((controller) {
+    controller.add(link.state);
+    final subscription = link.states.listen(
+      controller.add,
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+    controller.onCancel = subscription.cancel;
+  });
 });
 
 /// Latest server status, refreshed on demand while paired.

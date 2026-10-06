@@ -47,7 +47,7 @@ class BrandLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/branding/smart-remote-logo.jpg',
+      'assets/branding/logo.png',
       width: size,
       height: size,
       fit: BoxFit.contain,
@@ -150,11 +150,14 @@ class InfoSheet extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Step(index: 1, title: t.step1Title, body: t.step1Body),
-                  const SizedBox(height: AppTokens.gap),
-                  _Step(index: 2, title: t.step2Title, body: t.step2Body),
-                  const SizedBox(height: AppTokens.gap),
-                  _Step(index: 3, title: t.step3Title, body: t.step3Body),
+                  Text(
+                    t.howToUseBody,
+                    style: interStyle(
+                      13,
+                      FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -193,55 +196,6 @@ class InfoSheet extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// One numbered setup step.
-class _Step extends StatelessWidget {
-  const _Step({required this.index, required this.title, required this.body});
-
-  final int index;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.accent.withValues(alpha: 0.18),
-          ),
-          child: Text(
-            '$index',
-            style: monoStyle(12, FontWeight.w700, color: AppColors.accent),
-          ),
-        ),
-        const SizedBox(width: AppTokens.gapSmall),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: interStyle(14, FontWeight.w600)),
-              const SizedBox(height: 2),
-              Text(
-                body,
-                style: interStyle(
-                  13,
-                  FontWeight.w400,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

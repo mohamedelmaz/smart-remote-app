@@ -13,11 +13,19 @@ import '../widgets/glass.dart';
 /// macros.json on the PC sees them here after a reload. Every macro carries a
 /// text label; the icon is decorative and falls back to a neutral glyph when
 /// the server sends a name this app does not recognise.
-class DeckScreen extends ConsumerWidget {
+class DeckScreen extends ConsumerStatefulWidget {
   const DeckScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DeckScreen> createState() => _DeckScreenState();
+}
+
+class _DeckScreenState extends ConsumerState<DeckScreen> {
+  final Set<String> _runningMacros = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final macros = ref.watch(macrosProvider);
     final remote = ref.watch(remoteProvider);
 
@@ -65,10 +73,12 @@ class DeckScreen extends ConsumerWidget {
             itemCount: list.length,
             itemBuilder: (context, index) {
               final macro = list[index];
+              final running = _runningMacros.contains(macro.id);
               return MacroTile(
                 macro: macro,
-                enabled: remote?.connected ?? false,
-                onTap: () => _runMacro(context, ref, macro),
+                enabled: (remote?.connected ?? false) && !running,
+                busy: running,
+                onTap: () => _runMacro(macro),
               );
             },
           );
@@ -81,26 +91,30 @@ class DeckScreen extends ConsumerWidget {
   ///
   /// The error is surfaced rather than swallowed: a macro that silently does
   /// nothing is indistinguishable from a broken remote.
-  Future<void> _runMacro(
-    BuildContext context,
-    WidgetRef ref,
-    Macro macro,
-  ) async {
-    final remote = ref.read(remoteProvider);
-    // Not connected is a normal, recoverable state - the socket may still be
-    // coming back - so it reports rather than silently doing nothing. Silently
-    // returning here is what made the deck look frozen after a drop.
-    if (remote == null) {
-      _toast(context, 'Not connected to the PC.');
-      return;
-    }
+  Future<void> _runMacro(Macro macro) async {
+    if (_runningMacros.contains(macro.id)) return;
+    setState(() => _runningMacros.add(macro.id));
 
-    final ack = await remote.runMacro(macro.id);
-    if (!context.mounted) return;
-    if (ack.ok) {
-      _toast(context, '${macro.label} ran');
-    } else {
-      _toast(context, ack.error.isEmpty ? 'Macro failed' : ack.error);
+    final remote = ref.read(remoteProvider);
+    try {
+      // A disconnect can race the enabled state shown by the previous frame.
+      if (remote == null || !remote.connected) {
+        _toast(context, 'Not connected to the PC.');
+        return;
+      }
+
+      final ack = await remote.runMacro(macro.id);
+      if (!mounted) return;
+      _toast(
+        context,
+        ack.ok
+            ? '${macro.label} ran'
+            : (ack.error.isEmpty ? 'Macro failed' : ack.error),
+      );
+    } catch (error) {
+      if (mounted) _toast(context, 'Macro failed: $error');
+    } finally {
+      if (mounted) setState(() => _runningMacros.remove(macro.id));
     }
   }
 
@@ -123,11 +137,13 @@ class MacroTile extends StatelessWidget {
     super.key,
     required this.macro,
     required this.enabled,
+    this.busy = false,
     required this.onTap,
   });
 
   final Macro macro;
   final bool enabled;
+  final bool busy;
   final VoidCallback onTap;
 
   @override
@@ -138,11 +154,20 @@ class MacroTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            macroIcon(macro.icon),
-            size: 26,
-            color: enabled ? AppColors.accent : AppColors.textSecondary,
-          ),
+          if (busy)
+            const SizedBox.square(
+              dimension: 26,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.accent,
+              ),
+            )
+          else
+            Icon(
+              macroIcon(macro.icon),
+              size: 26,
+              color: enabled ? AppColors.accent : AppColors.textSecondary,
+            ),
           const SizedBox(height: AppTokens.gapSmall),
           // Flexible plus ellipsis: a long custom macro label must not overflow
           // a grid cell on a small phone.

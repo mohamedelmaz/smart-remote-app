@@ -1,17 +1,36 @@
-# smart_remote
+# Smart Remote
 
-A new Flutter project.
+Flutter client for controlling a Windows PC running the Smart Remote server.
+Run the server on the PC, connect both devices to the same Wi-Fi network, then
+enter the PC's IP address and PIN in the app.
 
-## Getting Started
+## Branding assets
 
-This project is a starting point for a Flutter application.
+The pairing and About screens use `assets/branding/logo.png`. Convert the
+provided source JPEG to that asset from the repository root with PowerShell:
 
-A few resources to get you started if this is your first Flutter project:
+```powershell
+$source = 'C:\Users\elmam\Desktop\assets-smart remote\smart-remote-logo.jpg'
+$target = 'mobile\assets\branding\logo.png'
+Add-Type -AssemblyName System.Drawing
+$image = [System.Drawing.Image]::FromFile($source)
+try {
+    $image.Save($target, [System.Drawing.Imaging.ImageFormat]::Png)
+} finally {
+    $image.Dispose()
+}
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+The Windows executable uses the same logo through a multi-size ICO and a
+compiled Windows resource. From the repository root, run:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```powershell
+Set-Location server
+go run .\tools\mkicon -in ..\mobile\assets\branding\logo.png -out .\internal\remote\assets\smartremote.ico
+windres -i winres.rc -O coff -o rsrc.syso
+go build -o smart-remote-app.exe .
+```
+
+`windres` is provided by MinGW/MSYS2 and must be on `PATH`. The `.syso` is a
+machine-specific build artifact and is intentionally ignored by Git; regenerate
+it when building the Windows executable on another machine.

@@ -112,5 +112,8 @@ class Remote {
 /// The command helper, or null when not paired.
 final remoteProvider = Provider<Remote?>((ref) {
   final link = ref.watch(remoteLinkProvider);
+  // Rebuild command consumers when this same link transitions through a drop
+  // or reconnect; pairing changes alone do not signal socket lifecycle events.
+  ref.watch(remoteLinkStateProvider);
   return link == null ? null : Remote(link);
 });

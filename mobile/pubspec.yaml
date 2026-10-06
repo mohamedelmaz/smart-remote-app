@@ -65,7 +65,6 @@ flutter:
 
   assets:
     # The brand logo, shown on the pairing screen and in the About sheet.
-    # Sourced from assets-smart remote/smart-remote-logo.jpg and regenerated
-    # into the Windows .ico by server/tools/mkicon, so both platforms show the
-    # same mark. See server/tools/mkicon for the icon build step.
-    - assets/branding/smart-remote-logo.jpg
+    # Converted from assets-smart remote/smart-remote-logo.jpg. The same
+    # source logo generates the Windows .ico via server/tools/mkicon.
+    - assets/branding/logo.png

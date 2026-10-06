@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/commands.dart';
 import '../core/remote_link.dart';
 import '../l10n/strings.dart';
+import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
 import 'pairing_screen.dart';
@@ -60,14 +61,14 @@ const List<_Shortcut> _shortcutSpecs = [
   ),
   _Shortcut(
     en: 'Lock PC',
-    ar: 'قفل الحاسوب',
+    ar: 'قفل الجهاز',
     icon: Icons.lock,
     mods: ['win'],
     key: 'l',
   ),
   _Shortcut(
-    en: 'Switch App',
-    ar: 'تبديل التطبيق',
+    en: 'Switch Apps',
+    ar: 'تبديل التطبيقات',
     icon: Icons.swap_horiz,
     mods: ['alt'],
     key: 'tab',
@@ -80,7 +81,7 @@ const List<_Shortcut> _shortcutSpecs = [
     key: 'esc',
   ),
   _Shortcut(
-    en: 'Snip Screen',
+    en: 'Snipping Tool',
     ar: 'أداة القص',
     icon: Icons.crop_free,
     mods: ['win', 'shift'],
@@ -225,6 +226,7 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
   /// one command per frame.
   Timer? _volumeDebounce;
   bool _muted = false;
+  bool _commandInProgress = false;
 
   @override
   void dispose() {
@@ -258,33 +260,47 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
     Future<Ack> Function() action, {
     String? success,
   }) async {
-    final ack = await action();
-    if (!mounted) return;
+    if (_commandInProgress) return;
+    setState(() => _commandInProgress = true);
 
+    try {
+      final ack = await action();
+      if (!mounted) return;
+
+      if (!ack.ok) {
+        _toast(ack.error.isEmpty ? 'The PC did not accept it' : ack.error);
+        return;
+      }
+      if (success != null) {
+        _toast(success, duration: const Duration(milliseconds: 900));
+      }
+    } catch (error) {
+      if (mounted) _toast('Command failed: $error');
+    } finally {
+      if (mounted) setState(() => _commandInProgress = false);
+    }
+  }
+
+  void _toast(String message, {Duration duration = const Duration(seconds: 2)}) {
     final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-
-    if (!ack.ok) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(ack.error.isEmpty ? 'The PC did not accept it' : ack.error),
-      ));
-      return;
-    }
-    if (success != null) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(success),
-        duration: const Duration(milliseconds: 900),
-      ));
-    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), duration: duration));
   }
 
   @override
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
+    ref.listen(remoteLinkStateProvider, (previous, next) {
+      if (next.valueOrNull != LinkState.ready) {
+        _volumeDebounce?.cancel();
+        _volumeDebounce = null;
+      }
+    });
     // Gates on a live socket, not merely a stored pairing: a pairing outlives
     // the connection, so the looser check left buttons looking live while every
     // tap was discarded.
-    final enabled = remote?.connected ?? false;
+    final enabled = (remote?.connected ?? false) && !_commandInProgress;
     // Non-null only when enabled. Every onPressed below is guarded by
     // `enabled`, so promoting once here removes the null check from each
     // closure without weakening type safety anywhere.

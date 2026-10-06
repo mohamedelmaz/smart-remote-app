@@ -294,8 +294,13 @@ func send(inputs []input) (int, error) {
 		uintptr(unsafe.Pointer(&inputs[0])),
 		unsafe.Sizeof(inputs[0]),
 	)
-	if n == 0 {
-		return 0, err
+	if n != uintptr(len(inputs)) {
+		if err != nil {
+			return int(n), err
+		}
+		return int(n), fmt.Errorf(
+			"remote: SendInput inserted %d of %d events", n, len(inputs),
+		)
 	}
 	return int(n), nil
 }
@@ -345,6 +350,25 @@ func (in *Injector) Chord(mods []uint16, vk uint16) error {
 	in.mu.Lock()
 	defer in.mu.Unlock()
 
+	ev := chordInputs(mods, vk)
+	sent, err := send(ev)
+	if err == nil && sent == len(ev) {
+		return nil
+	}
+	if err == nil {
+		err = fmt.Errorf("remote: SendInput inserted %d of %d chord events",
+			sent, len(ev))
+	}
+
+	// SendInput can report a partial batch. Best-effort release every key in
+	// the chord so a partial press cannot leave a modifier latched on Windows.
+	if _, releaseErr := send(chordReleaseInputs(mods, vk)); releaseErr != nil {
+		return fmt.Errorf("%w; chord key release failed: %v", err, releaseErr)
+	}
+	return err
+}
+
+func chordInputs(mods []uint16, vk uint16) []input {
 	var flags uint32
 	if extendedKeys[vk] {
 		flags |= keyEventExtended
@@ -370,8 +394,23 @@ func (in *Injector) Chord(mods []uint16, vk uint16) error {
 		}
 		ev = append(ev, newKeyInput(mods[i], 0, f))
 	}
-	_, err := send(ev)
-	return err
+	return ev
+}
+
+func chordReleaseInputs(mods []uint16, vk uint16) []input {
+	flags := uint32(keyEventKeyUp)
+	if extendedKeys[vk] {
+		flags |= keyEventExtended
+	}
+	ev := []input{newKeyInput(vk, 0, flags)}
+	for i := len(mods) - 1; i >= 0; i-- {
+		flags = keyEventKeyUp
+		if extendedKeys[mods[i]] {
+			flags |= keyEventExtended
+		}
+		ev = append(ev, newKeyInput(mods[i], 0, flags))
+	}
+	return ev
 }
 
 // SetLatch drives a modifier key to a latched (held) or released state.

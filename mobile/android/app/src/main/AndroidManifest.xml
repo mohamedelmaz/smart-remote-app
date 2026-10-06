@@ -27,6 +27,9 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
+        <meta-data
+            android:name="com.smartremote.developer"
+            android:value="elmamo" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

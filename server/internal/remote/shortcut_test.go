@@ -264,21 +264,10 @@ func TestChordKeyIsNotAlsoAModifier(t *testing.T) {
 // separate commands, a dropped frame mid-chord would leave the modifier held
 // and every later keystroke on the PC would be modified.
 func TestChordReleasesEveryModifier(t *testing.T) {
-	// The event sequence Chord builds, expressed directly against the same
-	// helpers, so the invariant is asserted rather than described.
 	mods := []uint16{vkLWin, vkShift}
 	vk := uint16('S')
 
-	ev := make([]input, 0, len(mods)*2+2)
-	for _, m := range mods {
-		ev = append(ev, newKeyInput(m, 0, 0))
-	}
-	ev = append(ev,
-		newKeyInput(vk, 0, 0),
-		newKeyInput(vk, 0, keyEventKeyUp))
-	for i := len(mods) - 1; i >= 0; i-- {
-		ev = append(ev, newKeyInput(mods[i], 0, keyEventKeyUp))
-	}
+	ev := chordInputs(mods, vk)
 
 	if want := len(mods)*2 + 2; len(ev) != want {
 		t.Fatalf("chord built %d events, want %d", len(ev), want)
@@ -314,6 +303,22 @@ func TestChordReleasesEveryModifier(t *testing.T) {
 			t.Errorf("VK_%X left held %d times; the modifier would stay "+
 				"latched on the PC", vk, n)
 		}
+	}
+
+	releases := chordReleaseInputs(mods, vk)
+	if want := len(mods) + 1; len(releases) != want {
+		t.Fatalf("recovery built %d release events, want %d",
+			len(releases), want)
+	}
+	for _, event := range releases {
+		if event.U.ki().Flags&keyEventKeyUp == 0 {
+			t.Errorf("recovery event for VK_%X is not a key release",
+				event.U.ki().Vk)
+		}
+	}
+	if got := releases[0].U.ki().Vk; got != vk {
+		t.Errorf("recovery releases VK_%X first, want trigger key VK_%X",
+			got, vk)
 	}
 }
 
