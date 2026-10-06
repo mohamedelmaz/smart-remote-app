@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,14 +16,22 @@ import '../widgets/glass.dart';
 ///   * one finger, Drag Mode off -> move the cursor only
 ///   * one finger, Drag Mode on  -> hold left button and drag (select/drop)
 ///   * two fingers                -> scroll
-///   * tap                        -> click
+///   * tap                        -> left click
+///   * two-finger tap             -> right click (opt-in, OFF by default)
 ///
-/// Moving the cursor must never hold a button down. Holding left while
-/// travelling is exactly what produces a text selection on the PC, so a
-/// one-finger swipe turned every gesture into a drag-and-select. Because that
-/// is the most frequent gesture by far, the default is move-only and
-/// drag-and-drop is opt-in, which keeps the common case free of side effects
-/// while still allowing the behaviour when it is wanted.
+/// Pointer bookkeeping lives in the raw [Listener] (not in the scale
+/// recogniser), because the recogniser reports neither a complete pointer
+/// count nor a complete travel distance.
+///
+/// FIXES in this version:
+///  1. `releaseInput()` is no longer sent on every touch. It sends a button-up
+///     for ALL buttons, and on Windows a stray right-button-up makes Chrome
+///     open the context menu. It is now only sent when a drag is really held,
+///     or when the user presses "Release held buttons".
+///  2. `ref.watch` inside `_onUpdate` replaced by `ref.read`.
+///  3. A right click now requires two fingers to be present (and dwelled) at
+///     the moment the first finger lifts, with no real travel.
+///  4. Any travel beyond the threshold cancels the two-finger-tap candidate.
 class TouchpadScreen extends ConsumerStatefulWidget {
   const TouchpadScreen({super.key});
 
@@ -29,57 +39,67 @@ class TouchpadScreen extends ConsumerStatefulWidget {
   ConsumerState<TouchpadScreen> createState() => _TouchpadScreenState();
 }
 
-/// How far a finger must travel before a gesture counts as a drag rather
-/// than movement or a tap.
-///
-/// Without a threshold, the natural tremor of a resting finger is enough to
-/// start a drag, so a stationary thumb would click-and-drag on the PC.
+/// How far a finger must travel before a gesture counts as a drag/movement.
 const double _dragThreshold = 8;
 
 /// A movement below this is discarded as sensor jitter.
 const double _moveDeadzone = 0.5;
 
+/// Longest a gesture may last and still count as a tap.
+const Duration _tapMaxDuration = Duration(milliseconds: 400);
+
+/// How long a second finger must stay down before it counts as a deliberate
+/// two-finger tap (filters phantom pointers from the digitiser).
+const Duration _twoFingerDwell = Duration(milliseconds: 60);
+
 class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
     with WidgetsBindingObserver {
-  /// The most pointers seen during the current gesture.
-  ///
-  /// This is what distinguishes a one-finger tap (left click) from a
-  /// two-finger tap (right click). The scale recogniser reports its start as
-  /// soon as the *first* finger lands, so a snapshot taken at gesture start is
-  /// 1 even for a two-finger gesture: the second finger arrives milliseconds
-  /// later, after the start has already fired. Counting the peak is what lets a
-  /// two-finger tap be recognised as a right click at all.
-  int _maxPointers = 0;
-
   /// Whether the left button is currently held down on the PC.
-  ///
-  /// This is the only thing that turns movement into a selection, so it is
-  /// released unconditionally on gesture end and on cancel.
   bool _dragging = false;
+
+  /// Live pointers for the current gesture, keyed by pointer id.
+  final Map<int, Offset> _pointers = {};
+
+  /// Centroid of [_pointers] on the previous move.
+  Offset? _lastCentroid;
+
+  /// Total centroid travel since the first pointer went down.
+  double _rawTravel = 0;
+
+  /// True once a second finger has been down for [_twoFingerDwell].
+  bool _twoFingerDwelled = false;
+
+  /// True if, when the FIRST finger lifted, two dwelled fingers were present.
+  /// This is what really identifies a two-finger tap.
+  bool _twoFingerTapCandidate = false;
+
+  Timer? _dwellTimer;
 
   /// Whether the user has opted into drag-and-drop for one-finger gestures.
   bool _dragMode = false;
 
-  /// Total movement since the gesture started, in logical pixels.
-  double _travel = 0;
+  /// Whether a two-finger tap may produce a right click (OFF by default).
+  bool _allowTwoFingerClick = false;
 
-  /// When the gesture started, used to classify a tap versus a drag.
-  DateTime? _startTime;
+  /// Highest number of simultaneous fingers in this gesture.
+  int _peakPointers = 0;
+
+  /// When the current gesture's first pointer went down.
+  DateTime? _rawStart;
+
+  /// Travel as the scale recogniser sees it (scroll / arming Drag Mode).
+  double _travel = 0;
 
   /// Sensitivity multiplier applied to drag distance.
   double _speed = 1.0;
 
-  /// The link captured while this widget is mounted.
-  ///
-  /// Needed because `ref` is unusable from `dispose`, yet the release on the
-  /// way out is the single most important thing this screen does.
+  /// Link captured while mounted (ref is unusable from dispose).
   RemoteLink? _capturedLink;
 
-  /// Turns drag-and-drop on or off.
-  ///
-  /// Turning it off mid-gesture is not possible, but leaving Drag Mode
-  /// enabled while the previous drag is still held would strand the button,
-  /// so the mode is reset whenever a gesture ends.
+  void _toggleTwoFingerClick() {
+    setState(() => _allowTwoFingerClick = !_allowTwoFingerClick);
+  }
+
   void _toggleDragMode() {
     setState(() => _dragMode = !_dragMode);
   }
@@ -88,45 +108,32 @@ class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Captured now, while ref is valid, so the dispose-time release works.
     _capturedLink = ref.read(remoteLinkProvider);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Backgrounding the app does NOT reliably fire onScaleCancel or
-    // onScaleEnd: a call arriving mid-drag, a notification shade pulled down,
-    // or a plain switch to another app all abandon the gesture silently. When
-    // that happens the PC's left button is left held down, and from then on
-    // every cursor movement selects text. There is no visible cause and no
-    // visible cure, which makes this by far the most damaging bug this screen
-    // can have - so it is handled explicitly rather than hoped away.
-    if (state != AppLifecycleState.resumed) _releaseEverything();
+    // Backgrounding can abandon a gesture silently; release a held drag.
+    if (state != AppLifecycleState.resumed) _releaseHeldDrag();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Leaving the screen mid-drag would otherwise leave the PC's left button
-    // held down, which is the worst failure mode this screen can have: the
-    // user would click-and-drag on their own machine with no way to see why.
-    _releaseEverything();
+    _releaseHeldDrag();
     super.dispose();
   }
 
-  /// Releases the drag and tells the PC to drop anything it still holds.
+  /// Cleans local state and releases the left button ONLY if we hold it.
   ///
-  /// Called from both dispose and the lifecycle observer. Riverpod forbids
-  /// touching `ref` once the element is disposed, and by dispose the ref is
-  /// already dead, so the link is read from a value captured while mounted.
-  ///
-  /// That captured link stays valid regardless: it belongs to the pairing
-  /// rather than to this screen, so it outlives the widget.
-  void _releaseEverything() {
+  /// Deliberately does not call `releaseInput()` unconditionally: that sends
+  /// button-ups for every button, and a spurious right-button-up is enough to
+  /// open a context menu on Windows.
+  void _releaseHeldDrag() {
+    _dwellTimer?.cancel();
+    _dwellTimer = null;
+    _pointers.clear();
     _endDrag();
-    final link = _capturedLink;
-    if (link == null) return;
-    Remote(link).releaseInput();
   }
 
   @override
@@ -142,55 +149,58 @@ class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
               builder: (context, constraints) {
                 final size = Size(constraints.maxWidth, constraints.maxHeight);
                 return Listener(
-                  // A Listener sits outside the GestureDetector purely to catch
-                  // gesture abandonment. GestureDetector no longer exposes
-                  // onScaleCancel, so an interrupted gesture (an incoming call, a
-                  // system edge-swipe, a notification shade) would otherwise
-                  // never release a held button. onPointerCancel fires in
-                  // exactly those cases, and because it is a raw pointer
-                  // callback it does not compete in the gesture arena.
+                  onPointerDown: _onPointerDown,
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: _onPointerUp,
                   onPointerCancel: (_) => _onCancel(),
                   child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      // The pointer count is sampled on the first pointer down
-                      // and again on scale start, which is how two-finger
-                      // gestures are distinguished.
-                      onScaleStart: (details) => _onStart(details, size),
-                      onScaleUpdate: (details) => _onUpdate(details, size),
-                      onScaleEnd: (details) => _onEnd(details),
-                      child: CustomPaint(
-                        painter: _TouchpadPainter(active: _dragging),
-                        child: SizedBox.expand(
-                          child: Center(
-                            child: Text(
-                              _dragMode
-                                  ? 'Drag mode armed\nMoving will select on the PC'
-                                  : 'Swipe to move\nTap to click\nTwo fingers to scroll',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w400,
-                                height: 1.6,
-                              ),
+                    behavior: HitTestBehavior.opaque,
+                    onScaleStart: (details) => _onStart(details, size),
+                    onScaleUpdate: (details) => _onUpdate(details, size),
+                    onScaleEnd: (details) => _onEnd(details),
+                    child: CustomPaint(
+                      painter: _TouchpadPainter(active: _dragging),
+                      child: SizedBox.expand(
+                        child: Center(
+                          child: Text(
+                            _dragMode
+                                ? 'Drag mode armed\nMoving will select on the PC'
+                                : 'Swipe to move\nTap to click\nTwo fingers to scroll',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                              height: 1.6,
                             ),
                           ),
                         ),
                       ),
                     ),
+                  ),
                 );
               },
             ),
           ),
           const SizedBox(height: AppTokens.gap),
-          // Drag Mode is opt-in and visibly armed, so a drag is never a
-          // surprise and the user always knows why the cursor is selecting.
           RemoteButton(
             label: _dragMode ? 'Drag mode: ON' : 'Drag mode: OFF',
             icon: _dragMode ? Icons.pan_tool_alt : Icons.pan_tool_outlined,
             expand: true,
             active: _dragMode,
             onPressed: remote == null ? null : _toggleDragMode,
+          ),
+          const SizedBox(height: AppTokens.gapSmall),
+          RemoteButton(
+            label: _allowTwoFingerClick
+                ? 'Two-finger right click: ON'
+                : 'Two-finger right click: OFF',
+            icon: _allowTwoFingerClick
+                ? Icons.touch_app
+                : Icons.touch_app_outlined,
+            expand: true,
+            active: _allowTwoFingerClick,
+            onPressed: remote == null ? null : _toggleTwoFingerClick,
           ),
           const SizedBox(height: AppTokens.gapSmall),
           _SpeedRow(
@@ -204,10 +214,8 @@ class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
             onRight: () => remote?.click('right'),
           ),
           const SizedBox(height: AppTokens.gapSmall),
-          // A visible cure for a stuck button. The automatic releases above
-          // cover every case this app can observe, but if the PC is already in
-          // the stuck state before the app starts, the user needs a way out
-          // that does not depend on the app correctly diagnosing what happened.
+          // Manual cure for a stuck button (the only place releaseInput is
+          // sent besides explicit user action).
           RemoteButton(
             label: 'Release held buttons',
             icon: Icons.pan_tool,
@@ -229,35 +237,153 @@ class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
     );
   }
 
-  void _onStart(ScaleStartDetails details, Size size) {
-    // Clear any button left held by an earlier gesture before this one begins.
-    // A stale hold is invisible locally - _dragging was already reset when that
-    // widget rebuilt - but on the PC it turns every subsequent movement into a
-    // text selection. One cheap message here is what makes the pad reliably
-    // move-only, regardless of how the previous gesture ended.
-    ref.read(remoteProvider)?.releaseInput();
+  // ---------------------------------------------------------------------------
+  // Raw pointer handling
+  // ---------------------------------------------------------------------------
 
-    _maxPointers = details.pointerCount;
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pointers.isEmpty) {
+      // New gesture: reset all raw bookkeeping.
+      _rawTravel = 0;
+      _lastCentroid = null;
+      _twoFingerDwelled = false;
+      _twoFingerTapCandidate = false;
+      _peakPointers = 0;
+      _rawStart = DateTime.now();
+      _dwellTimer?.cancel();
+      _dwellTimer = null;
+      // FIX: only release if a stale drag is actually held. Previously
+      // releaseInput() was sent on EVERY touch, which sends a right-button-up
+      // to Windows and makes Chrome show the context menu.
+      if (_dragging) _endDrag();
+    }
+    _pointers[event.pointer] = event.position;
+    if (_pointers.length > _peakPointers) _peakPointers = _pointers.length;
+    _lastCentroid = _centroid;
+    _armTwoFingerDwell();
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers[event.pointer] = event.position;
+    final centroid = _centroid;
+    final previous = _lastCentroid;
+    _lastCentroid = centroid;
+    if (previous != null) _rawTravel += (centroid - previous).distance;
+
+    // FIX: real travel means this is not a tap of any kind, so it can never
+    // become a right click.
+    if (_rawTravel > _dragThreshold) {
+      _twoFingerTapCandidate = false;
+      _twoFingerDwelled = false;
+      _dwellTimer?.cancel();
+      _dwellTimer = null;
+      return;
+    }
+    _armTwoFingerDwell();
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    // FIX: sample how many fingers are present at the moment of release,
+    // BEFORE removing this pointer. A genuine two-finger tap has two dwelled
+    // fingers here and almost no travel.
+    final fingersAtRelease = _pointers.length;
+    if (fingersAtRelease >= 2 &&
+        _twoFingerDwelled &&
+        _rawTravel <= _dragThreshold) {
+      _twoFingerTapCandidate = true;
+    }
+
+    _pointers.remove(event.pointer);
+    _armTwoFingerDwell();
+    if (_pointers.isNotEmpty) {
+      _lastCentroid = _centroid;
+      return;
+    }
+    _lastCentroid = null;
+    _classifyAndClick();
+  }
+
+  /// Emits the click, if any, that the finished gesture represents.
+  void _classifyAndClick() {
+    final remote = ref.read(remoteProvider);
+    final elapsed = DateTime.now().difference(_rawStart ?? DateTime.now());
+
+    final moved = _rawTravel > _dragThreshold;
+    final wasTap = elapsed < _tapMaxDuration && !moved;
+
+    // A drag outranks a click.
+    if (_dragging || !wasTap) {
+      _resetRawState();
+      if (remote == null) return;
+      if (_dragging) {
+        _endDrag();
+        if (mounted) setState(() {});
+      }
+      return;
+    }
+
+    if (remote == null) {
+      _resetRawState();
+      return;
+    }
+
+    if (_allowTwoFingerClick && _twoFingerTapCandidate) {
+      remote.click('right');
+    } else {
+      // Ambiguous gestures always fall through to LEFT, never to right.
+      remote.click('left');
+    }
+    _resetRawState();
+    if (mounted) setState(() {});
+  }
+
+  /// The mean position of the live pointers.
+  Offset get _centroid {
+    var sum = Offset.zero;
+    for (final position in _pointers.values) {
+      sum += position;
+    }
+    return _pointers.isEmpty ? Offset.zero : sum / _pointers.length.toDouble();
+  }
+
+  /// Promotes a sustained two-finger contact to [_twoFingerDwelled].
+  void _armTwoFingerDwell() {
+    if (_pointers.length < 2) {
+      if (_dwellTimer != null) {
+        _dwellTimer!.cancel();
+        _dwellTimer = null;
+      }
+      return;
+    }
+    if (_twoFingerDwelled || _dwellTimer != null) return;
+    _dwellTimer = Timer(_twoFingerDwell, () {
+      _dwellTimer = null;
+      if (!mounted) return;
+      // Only valid if two fingers are still down when the timer matures.
+      if (_pointers.length >= 2) _twoFingerDwelled = true;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scale recogniser callbacks (cursor movement and scroll)
+  // ---------------------------------------------------------------------------
+
+  void _onStart(ScaleStartDetails details, Size size) {
     _dragging = false;
     _travel = 0;
-    _startTime = DateTime.now();
     setState(() {});
   }
 
   void _onUpdate(ScaleUpdateDetails details, Size size) {
-    final remote = ref.watch(remoteProvider);
+    // FIX: ref.read, not ref.watch, inside a callback.
+    final remote = ref.read(remoteProvider);
     if (remote == null) return;
 
     final delta = details.focalPointDelta;
-    if (details.pointerCount > _maxPointers) {
-      _maxPointers = details.pointerCount;
-    }
 
-    // Two fingers scroll, and take priority over everything else: a second
-    // finger often lands a few milliseconds after the first, so the branch is
-    // keyed on the live pointer count rather than the count at gesture start.
+    // Two fingers scroll.
     if (details.pointerCount >= 2) {
-      // One wheel notch per 40 logical pixels of travel.
       final notches = (delta.dy / 40).round();
       final horizontal = (delta.dx / 40).round();
       if (notches != 0 || horizontal != 0) {
@@ -271,8 +397,7 @@ class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
 
     _travel += delta.distance;
 
-    // A drag only begins in Drag Mode and only once the finger has clearly
-    // travelled. This is what keeps a plain swipe from selecting text.
+    // A drag only begins in Drag Mode and once the finger clearly travelled.
     if (_dragMode && !_dragging && _travel > _dragThreshold) {
       _dragging = true;
       remote.buttonDown('left');
@@ -283,59 +408,43 @@ class _TouchpadScreenState extends ConsumerState<TouchpadScreen>
     if (dx != 0 || dy != 0) remote.moveCursor(dx, dy);
   }
 
-  /// Releases the button if a drag is still held.
-  ///
-  /// Called from both end and cancel: a gesture interrupted by a phone call or
-  /// a system gesture would otherwise leave the PC's left button stuck down.
+  /// Releases the left button if a drag is still held.
   void _endDrag() {
     if (!_dragging) return;
-    // Uses the captured link rather than ref, because this runs from dispose.
+    // Uses the captured link rather than ref, because this can run from dispose.
     final link = _capturedLink;
     if (link != null) Remote(link).buttonUp('left');
     _dragging = false;
   }
 
   void _onEnd(ScaleEndDetails details) {
-    final remote = ref.watch(remoteProvider);
-    if (remote == null) return;
-
-    if (_dragging) {
-      // Drag Mode stays on for the next gesture so a long drag does not need
-      // re-arming halfway through, but the button is always released here.
-      remote.buttonUp('left');
-      _dragging = false;
-      setState(() {});
-      return;
-    }
-
-    // No drag was engaged: classify by peak pointer count and duration.
-    // Movement alone is never a click, so a long swipe cannot click the PC.
-    //
-    // The peak pointer count is used rather than the count at gesture start,
-    // because the recogniser reports its start on the first finger down - see
-    // _maxPointers. Using the start count would classify every two-finger tap as
-    // a left click, so a right click would be impossible to perform by gesture.
-    final elapsed = DateTime.now().difference(_startTime ?? DateTime.now());
-    final wasTap = elapsed < const Duration(milliseconds: 400) &&
-        _travel < _dragThreshold;
-
-    if (wasTap && _maxPointers >= 2) {
-      // Two fingers down without travel is a right click.
-      remote.click('right');
-    } else if (wasTap) {
-      // A single finger taps for a left click.
-      remote.click('left');
-    }
-    setState(() {});
+    if (!_dragging) return;
+    final remote = ref.read(remoteProvider);
+    if (remote != null) remote.buttonUp('left');
+    _dragging = false;
+    if (mounted) setState(() {});
   }
 
   /// Called when the gesture is interrupted before completing.
   void _onCancel() {
+    _resetRawState();
     _endDrag();
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  /// Clears the per-gesture raw state.
+  void _resetRawState() {
+    _dwellTimer?.cancel();
+    _dwellTimer = null;
+    _pointers.clear();
+    _twoFingerDwelled = false;
+    _twoFingerTapCandidate = false;
+    _rawTravel = 0;
+    _lastCentroid = null;
+    _peakPointers = 0;
+    _rawStart = null;
   }
 }
-
 
 /// Draws the circular touchpad with a cyan neon ring.
 class _TouchpadPainter extends CustomPainter {
@@ -365,8 +474,7 @@ class _TouchpadPainter extends CustomPainter {
         ).createShader(rect),
     );
 
-    // The neon ring is the primary state cue, so it is drawn with a blur for
-    // the glow and a crisp stroke on top so it stays visible on any screen.
+    // Neon glow.
     canvas.drawCircle(
       center,
       radius,
@@ -376,6 +484,7 @@ class _TouchpadPainter extends CustomPainter {
         ..strokeWidth = active ? 3 : 2
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
     );
+    // Crisp ring.
     canvas.drawCircle(
       center,
       radius,
@@ -385,7 +494,7 @@ class _TouchpadPainter extends CustomPainter {
         ..strokeWidth = active ? 2 : 1,
     );
 
-    // Centre crosshair, giving the pad a visible centre reference.
+    // Centre crosshair.
     final tick = Paint()
       ..color = AppColors.accent.withValues(alpha: 0.25)
       ..strokeWidth = 1;
@@ -417,13 +526,13 @@ class _SpeedRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassPanel(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppTokens.gap, vertical: 10),
+        horizontal: AppTokens.gap,
+        vertical: 10,
+      ),
       child: Row(
         children: [
           const Icon(Icons.speed, size: 18, color: AppColors.accent),
           const SizedBox(width: AppTokens.gapSmall),
-          // A text label accompanies the icon so the control is identifiable
-          // without relying on the glyph.
           Text('Speed', style: interStyle(13, FontWeight.w600)),
           Expanded(
             child: SliderTheme(
@@ -457,10 +566,6 @@ class _SpeedRow extends StatelessWidget {
 }
 
 /// Explicit left and right click buttons.
-///
-/// These are always available so a right click never depends on the gesture
-/// recogniser succeeding, which is unreliable on some Android keyboards and
-/// trackpads.
 class _ClickRow extends StatelessWidget {
   const _ClickRow({
     required this.enabled,

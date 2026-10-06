@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestProbeScreenCaptureAnswers runs the probe for real.
@@ -212,20 +213,86 @@ func TestNormalizeAcceptsRelease(t *testing.T) {
 // TestViewerLockIsExclusive covers the single-viewer rule.
 func TestViewerLockIsExclusive(t *testing.T) {
 	var l ViewerLock
-	if err := l.Acquire("phone"); err != nil {
+	lease, evicted, err := l.Acquire("phone")
+	if err != nil {
 		t.Fatalf("first Acquire = %v, want nil", err)
 	}
-	if err := l.Acquire("laptop"); err == nil {
+	if evicted != "" {
+		t.Fatalf("first Acquire evicted %q, want empty", evicted)
+	}
+	if _, _, err := l.Acquire("laptop"); err == nil {
 		t.Fatal("second Acquire succeeded; two viewers would halve each " +
 			"other's frame rate and double the capture cost")
 	}
-	l.Release("laptop") // must not steal the lock
+
+	// A release must present the lease it acquired with: a foreign lease and
+	// the all-zero lease must both be ignored, so a zombie handler that wakes
+	// up after its lock was reclaimed cannot free its successor's lock.
+	l.Release(lease + 999)
+	l.Release(0)
 	if got := l.Holder(); got != "phone" {
-		t.Fatalf("Holder after a foreign Release = %q, want %q", got, "phone")
+		t.Fatalf("Holder after foreign/zero releases = %q, want %q", got, "phone")
 	}
-	l.Release("phone")
-	if err := l.Acquire("laptop"); err != nil {
+
+	l.Release(lease)
+	if _, _, err := l.Acquire("laptop"); err != nil {
 		t.Fatalf("Acquire after release = %v, want nil", err)
+	}
+}
+
+// TestViewerLockReclaimsStaleHolder pins the behaviour the 2026-10-08
+// incident demanded: a holder that has sent no frame for staleStreamLease is
+// force-reclaimed on the next Acquire, the eviction is reported to the caller
+// for logging, and the evicted holder's old lease can no longer release the
+// lock its successor now owns.
+func TestViewerLockReclaimsStaleHolder(t *testing.T) {
+	var l ViewerLock
+	staleLease, _, err := l.Acquire("wedged-phone")
+	if err != nil {
+		t.Fatalf("Acquire = %v, want nil", err)
+	}
+
+	// Simulate a session that stopped making progress before the stale
+	// window elapsed: backdate the recorded progress.
+	l.mu.Lock()
+	l.progress = time.Now().Add(-staleStreamLease - time.Second)
+	l.mu.Unlock()
+
+	// A live holder would still be refused...
+	lease, evicted, err := l.Acquire("fresh")
+	if err != nil {
+		t.Fatalf("Acquire on stale lock = %v, want nil (stale locks must be reclaimed)", err)
+	}
+	if evicted != "wedged-phone" {
+		t.Fatalf("evicted = %q, want %q so the takeover can be logged", evicted, "wedged-phone")
+	}
+	if got := l.Holder(); got != "fresh" {
+		t.Fatalf("Holder after takeover = %q, want %q", got, "fresh")
+	}
+
+	// ...the evicted holder's late Release is a no-op against the new lease.
+	l.Release(staleLease)
+	if got := l.Holder(); got != "fresh" {
+		t.Fatalf("Holder after stale release = %q, want %q (stale lease must not steal)", got, "fresh")
+	}
+
+	// Touch keeps a healthy holder fresh: backdate, touch, and another
+	// Acquire must still be refused as busy.
+	l.mu.Lock()
+	l.progress = time.Now().Add(-staleStreamLease - time.Second)
+	l.mu.Unlock()
+	l.Touch(lease)
+	if _, _, err := l.Acquire("third"); err == nil {
+		t.Fatal("Acquire succeeded right after Touch; progress tracking is broken")
+	}
+
+	// Reset is the unconditional shutdown path.
+	l.Reset()
+	if got := l.Holder(); got != "" {
+		t.Fatalf("Holder after Reset = %q, want empty", got)
+	}
+	if _, _, err := l.Acquire("after-reset"); err != nil {
+		t.Fatalf("Acquire after Reset = %v, want nil", err)
 	}
 }
 

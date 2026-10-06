@@ -261,7 +261,13 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)
-	remote.RemoveFirewallRule(logger)
+
+	// The firewall rules are deliberately left in place on exit: they are
+	// named, scoped, and verified idempotently on every start. Deleting them
+	// here would break the next start without Administrator rights - rules
+	// can only be created with elevation, which is exactly the failure mode
+	// that used to leave phones unable to connect after a restart as a
+	// normal user.
 	logger.Printf("bye")
 }
 

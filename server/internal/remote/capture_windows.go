@@ -316,11 +316,11 @@ type Frame struct {
 	CapturedAt time.Time
 }
 
-// Stream owns a Capturer and hands frames to a single viewer at a target
+// Stream owns a FrameSource and hands frames to a single viewer at a target
 // frame rate, doing the rate limiting here rather than in the HTTP handler so
 // that a slow client cannot force extra captures.
 type Stream struct {
-	cap     *Capturer
+	cap     FrameSource
 	fps     int
 	lastSeq uint64
 
@@ -330,8 +330,8 @@ type Stream struct {
 	once sync.Once
 }
 
-// NewStream wraps a capturer for streaming at fps frames per second.
-func NewStream(c *Capturer, fps int) *Stream {
+// NewStream wraps a frame source for streaming at fps frames per second.
+func NewStream(c FrameSource, fps int) *Stream {
 	if fps <= 0 || fps > 60 {
 		fps = 15
 	}

@@ -6,6 +6,9 @@
  */
 'use strict';
 
+// Disable browser context menu for professional app feel
+document.addEventListener('contextmenu', e => e.preventDefault());
+
 const $ = (id) => document.getElementById(id);
 
 /** Poll interval for the REST status refresh, in ms. */

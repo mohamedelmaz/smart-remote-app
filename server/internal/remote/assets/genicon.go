@@ -19,8 +19,8 @@ import (
 
 // Brand palette, matching the mobile app's theme.
 var (
-	deepVoid  = [4]byte{0x0A, 0x0E, 0x1A, 0xFF} // #0A0E1A background
-	elecCyan  = [4]byte{0x00, 0xE5, 0xFF, 0xFF} // #00E5FF accent
+	deepVoid = [4]byte{0x0A, 0x0E, 0x1A, 0xFF} // #0A0E1A background
+	elecCyan = [4]byte{0x00, 0xE5, 0xFF, 0xFF} // #00E5FF accent
 )
 
 // sizes are the resolutions written into the ICO. 16 is what the tray shows at
@@ -45,10 +45,10 @@ func main() {
 // the two.
 func build() []byte {
 	const (
-		dirSize     = 6
-		entrySize   = 16
-		biSize      = 40 // BITMAPINFOHEADER
-		bytesPerPx  = 4  // BGRA
+		dirSize    = 6
+		entrySize  = 16
+		biSize     = 40 // BITMAPINFOHEADER
+		bytesPerPx = 4  // BGRA
 	)
 
 	type image struct {

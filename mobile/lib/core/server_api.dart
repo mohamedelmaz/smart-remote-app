@@ -91,6 +91,15 @@ class ServerApi {
         'quality': '$quality',
       });
 
+  /// The webcam stream URL.
+  ///
+  /// The camera feed is gated by the same PIN as the desktop feed and is served
+  /// from a separate route with its own viewer lock, so watching a camera never
+  /// locks the user out of the Screen tab. See [screenUri] for why the PIN rides
+  /// as a query parameter.
+  Uri webcamUri({required String pin}) =>
+      _uri('/webcam', {'pin': pin});
+
   /// Checks a typed PIN against the one the PC displays on its dashboard.
   Future<bool> verifyPin(String pin) async {
     final status = await fetchStatus();

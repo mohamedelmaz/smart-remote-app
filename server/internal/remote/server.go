@@ -27,9 +27,19 @@ type Server struct {
 	macros   *MacroStore
 	audio    AudioSink
 	viewer   *ViewerLock
-	logger   *log.Logger
-	started  time.Time
-	port     int
+
+	// A separate lock for the camera.
+	//
+	// The single-viewer rule exists because two viewers of one device halve
+	// its frame rate. That holds for a camera exactly as it does for a screen,
+	// but a camera and a screen are different devices and contend for nothing,
+	// so sharing one lock would mean opening the Webcam tab locked the user
+	// out of the Screen tab and vice versa.
+	webcamViewer *ViewerLock
+
+	logger  *log.Logger
+	started time.Time
+	port    int
 
 	clients   map[*wsClient]struct{}
 	clientsMu sync.Mutex
@@ -90,16 +100,17 @@ func NewServer(opts ServerOptions) *Server {
 		opts.Auth = a
 	}
 	return &Server{
-		dispatch: opts.Dispatch,
-		auth:     opts.Auth,
-		macros:   opts.Dispatch.macros,
-		audio:    opts.Audio,
-		viewer:   &ViewerLock{},
-		logger:   opts.Logger,
-		started:  time.Now(),
-		port:     opts.Port,
-		clients:  map[*wsClient]struct{}{},
-		shutdown: make(chan struct{}),
+		dispatch:     opts.Dispatch,
+		auth:         opts.Auth,
+		macros:       opts.Dispatch.macros,
+		audio:        opts.Audio,
+		viewer:       &ViewerLock{},
+		webcamViewer: &ViewerLock{},
+		logger:       opts.Logger,
+		started:      time.Now(),
+		port:         opts.Port,
+		clients:      map[*wsClient]struct{}{},
+		shutdown:     make(chan struct{}),
 	}
 }
 
@@ -114,6 +125,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/macros/", s.handleMacroByID)
 	mux.HandleFunc("/api/pin", s.handlePin)
 	mux.HandleFunc("/screen", s.handleScreen)
+	mux.HandleFunc("/webcam", s.handleWebcam)
+	mux.HandleFunc("/api/cameras", s.handleCameras)
 	mux.HandleFunc("/api/screencap-test", s.handleScreencapTest)
 	mux.HandleFunc("/ws", s.handleWS)
 
@@ -328,7 +341,51 @@ func (s *Server) handleScreen(w http.ResponseWriter, r *http.Request) {
 	}, s.viewer, s.logger)
 }
 
+// handleWebcam serves the camera stream.
+//
+// It gates on exactly the same authorizeStream as the desktop feed, and that
+// matters more here, not less: a camera pointed at a desk or a hallway is the
+// most private thing this server can emit, so the PIN check is not optional and
+// shares Auth.Verify, which means the stream shares its lockout counter too.
+// A client cannot brute-force the PIN through the camera while being blocked
+// on the command channel.
+func (s *Server) handleWebcam(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeStream(w, r) {
+		return
+	}
+
+	stream := s.dispatch.StreamSettings()
+	ServeWebcamStream(w, r, ScreenStreamConfig{
+		FPS:     stream.FPS,
+		Quality: stream.Quality,
+	}, s.webcamViewer, s.logger)
+}
+
+// handleCameras lists the cameras this PC has, for the diagnostics panel.
+//
+// It is behind the same PIN gate as the streams: enumerating capture devices is
+// a small leak of information about the machine, and every other route in this
+// server is either read-only metadata or the dashboard itself.
+func (s *Server) handleCameras(w http.ResponseWriter, r *http.Request) {
+	if !s.authorizeStream(w, r) {
+		return
+	}
+
+	devices, err := ListWebcams()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"cameras": []WebcamDevice{},
+			"error":   err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cameras": devices})
+}
+
 // authorizeStream gates the desktop feed behind the pairing PIN.
+//
+// It also gates the webcam feed and the camera list, so it is named for the
+// streams it protects rather than for the single endpoint it grew out of.
 //
 // It shares Auth.Verify with the WebSocket, so a client that hammers this
 // endpoint is rate limited by the same counter and cannot brute-force the PIN

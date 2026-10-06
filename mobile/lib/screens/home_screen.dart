@@ -10,6 +10,7 @@ import 'media_screen.dart';
 import 'screen_viewer_screen.dart';
 import 'touchpad_screen.dart';
 import 'voice_screen.dart';
+import 'webcam_screen.dart';
 
 /// The tabs in the bottom navigation, in order.
 enum RemoteTab {
@@ -18,6 +19,7 @@ enum RemoteTab {
   deck('Deck', Icons.grid_view_outlined, Icons.grid_view),
   keys('Keys', Icons.keyboard_outlined, Icons.keyboard),
   screen('Screen', Icons.desktop_windows_outlined, Icons.desktop_windows),
+  webcam('Webcam', Icons.photo_camera_outlined, Icons.photo_camera),
   voice('Voice', Icons.mic_none, Icons.mic);
 
   const RemoteTab(this.label, this.icon, this.activeIcon);
@@ -81,6 +83,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return const KeyboardScreen();
       case RemoteTab.screen:
         return const ScreenViewerScreen();
+      case RemoteTab.webcam:
+        return const WebcamScreen();
       case RemoteTab.voice:
         return const VoiceScreen();
     }

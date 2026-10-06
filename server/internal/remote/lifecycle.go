@@ -101,9 +101,11 @@ func (s *Server) Shutdown(ctx context.Context) {
 				s.logger.Printf("http shutdown: %v", err)
 			}
 		}
-		// Release the viewer lock so a later start is not refused because of
-		// a stale holder from the previous run.
-		s.viewer.Release("")
+		// Release the viewer locks so a later start is not refused because
+		// of a stale holder from the previous run - including the webcam
+		// lock, which used to be forgotten here entirely.
+		s.viewer.Reset()
+		s.webcamViewer.Reset()
 		s.logger.Printf("shutdown complete")
 	})
 }
