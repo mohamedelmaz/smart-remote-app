@@ -565,7 +565,16 @@ function close(){m.classList.remove('open');document.documentElement.style.overf
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[data-dl]');if(!a)return;e.preventDefault();e.stopPropagation();open(a.getAttribute('data-dl'))},true);
 document.addEventListener('auxclick',function(e){var a=e.target.closest&&e.target.closest('a[data-dl]');if(a){e.preventDefault();e.stopPropagation()}},true);
 chk.onchange=function(){go.disabled=!chk.checked};
-go.onclick=function(){if(!chk.checked||!target)return;var a=document.createElement('a');a.href=target;a.rel='noopener';a.target='_blank';document.body.appendChild(a);a.click();a.remove();close()};
+go.onclick=function(){
+  if(!chk.checked||!target)return;
+  var f=document.createElement('iframe');
+  f.style.display='none';
+  f.setAttribute('aria-hidden','true');
+  f.src=target;
+  document.body.appendChild(f);
+  setTimeout(function(){f.remove()},60000);
+  close();
+};
 document.getElementById('dlcancel').onclick=close;
 m.addEventListener('click',function(e){if(e.target===m)close()});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&m.classList.contains('open'))close()});
