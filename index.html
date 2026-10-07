@@ -78,6 +78,51 @@ h2:after{content:"";display:block;width:56px;height:3px;border-radius:2px;backgr
 .secure h2:after{margin-inline-start:0}
 .sub{max-width:620px;margin-inline:auto}
 @media(max-width:800px){.links{display:none}section{padding:48px 0}}
+body:after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse at 50% 15%,#000 15%,transparent 72%);mask-image:radial-gradient(ellipse at 50% 15%,#000 15%,transparent 72%)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:-6px 0 26px}.chips span{padding:6px 14px;border-radius:99px;font-size:13px;border:1px solid rgba(0,229,255,.3);background:rgba(0,229,255,.07);color:#9ff3ff}
+.js .rv{opacity:0;transform:translateY(26px);transition:opacity .7s,transform .7s}.js .rv.in{opacity:1;transform:none}
+.player{max-width:900px;margin:auto;border-radius:22px;border:1px solid rgba(0,229,255,.35);background:linear-gradient(180deg,#0d1426,#080d1a);box-shadow:0 0 90px rgba(0,229,255,.14),0 30px 70px rgba(0,0,0,.5);overflow:hidden}
+.pbar{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--mu)}
+.dots{display:flex;gap:6px}.dots i{width:10px;height:10px;border-radius:50%;background:#2a3552}
+#ptag{padding:3px 12px;border-radius:99px;background:rgba(0,229,255,.12);border:1px solid rgba(0,229,255,.35);color:var(--cy);font-weight:600}
+#pcount{margin-inline-start:auto;font-family:'JetBrains Mono',Consolas,monospace}
+.stage{height:440px;display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,rgba(0,229,255,.09),transparent 70%)}
+.fig{position:relative;transition:opacity .35s}.fig.out{opacity:0}
+.fig img{display:block;width:100%;height:100%;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.55);border:1px solid var(--line)}
+.hot{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid var(--cy);box-shadow:0 0 26px var(--cy);opacity:0;pointer-events:none}
+.hot:after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--cy);animation:ping 1.4s ease-out infinite}
+.hot.on{animation:tap 2.4s .6s both}
+@keyframes tap{0%{opacity:0;transform:scale(.3)}18%{opacity:1;transform:scale(1)}65%{transform:scale(1)}78%{transform:scale(.72)}100%{opacity:1;transform:scale(1)}}
+@keyframes ping{from{transform:scale(1);opacity:.8}to{transform:scale(2.2);opacity:0}}
+.cap{padding:18px 26px 8px;min-height:104px}.cap h3{font-size:21px;margin-bottom:4px}.cap p{color:var(--mu)}
+.timeline{direction:ltr;height:6px;margin:8px 26px 0;border-radius:3px;background:#1a2440;cursor:pointer}
+.timeline i{display:block;height:100%;width:0;border-radius:3px;background:var(--cy);box-shadow:0 0 12px var(--cy)}
+.ctrl{display:flex;align-items:center;gap:8px;padding:14px 26px 22px;flex-wrap:wrap}
+.ctrl button{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--tx);font-size:16px;cursor:pointer;transition:.2s}
+.ctrl button:hover{border-color:var(--cy);color:var(--cy)}
+.chapters{display:flex;gap:6px;margin-inline-start:auto;flex-wrap:wrap}
+.chapters button{width:32px;height:32px;font-size:13px}.chapters button.on{background:var(--cy);color:#04141A;border-color:var(--cy);box-shadow:0 0 14px rgba(0,229,255,.6)}
+@media(max-width:800px){.stage{height:340px}.chapters{margin:0;width:100%}.cap{min-height:128px}}
+
+/* ---- Aurora theme: deep indigo-to-ocean gradient, no black ---- */
+:root{--bg:#14226E;--card:rgba(255,255,255,.08);--line:rgba(255,255,255,.17);--tx:#F4F7FF;--mu:#BAC8F7;--cy:#2EE9FF}
+body{background:linear-gradient(160deg,#1B2A86 0%,#14439A 48%,#0C6FA3 100%) fixed}
+body:before{background:radial-gradient(640px 460px at 85% 8%,rgba(139,92,246,.45),transparent),radial-gradient(560px 420px at 4% 42%,rgba(34,211,238,.28),transparent),radial-gradient(520px 380px at 70% 78%,rgba(236,72,153,.20),transparent)}
+nav{background:rgba(24,40,120,.55)}
+.phone,.shot{background:rgba(10,18,70,.85)}
+.player{background:linear-gradient(180deg,rgba(18,32,104,.92),rgba(10,24,86,.92))}
+.timeline{background:rgba(255,255,255,.16)}.dots i{background:rgba(255,255,255,.28)}
+.btn.p{background:linear-gradient(135deg,#2EE9FF,#8FA8FF);border-color:transparent;box-shadow:0 8px 30px rgba(46,233,255,.35)}
+.card:hover{box-shadow:0 12px 40px rgba(10,20,80,.45)}
+/* ---- Centered hero, walkthrough straight below ---- */
+.hero{display:block;text-align:center;position:relative;padding:46px 0 10px}
+.lead{margin-inline:auto;max-width:640px}.btns,.chips{justify-content:center}
+.pad{position:absolute;left:0;right:0;top:-30px;margin:auto;width:min(640px,94vw);max-width:none;opacity:.26;z-index:-1}
+#watch{padding-top:24px}
+.player{max-width:980px}.stage{height:480px}
+.cap{min-height:150px}.cap p{font-size:16px;line-height:1.75}
+#spd{width:auto!important;border-radius:99px!important;padding:0 12px;font-size:13px!important}
+@media(max-width:800px){.stage{height:340px}.cap{min-height:210px}}
 </style>
 </head>
 <body>
@@ -88,6 +133,7 @@ h2:after{content:"";display:block;width:56px;height:3px;border-radius:2px;backgr
     <span>Smart <b>Remote</b></span>
   </div>
   <div class="links">
+    <a href="#watch" data-en="Watch" data-ar="شاهد"></a>
     <a href="#features" data-en="Features" data-ar="المميزات"></a>
     <a href="#install" data-en="Download" data-ar="التحميل"></a>
     <a href="#tour" data-en="App tour" data-ar="جولة التطبيق"></a>
@@ -100,6 +146,7 @@ h2:after{content:"";display:block;width:56px;height:3px;border-radius:2px;backgr
   <div>
     <h1 data-en="Your device, <span>extended.</span>" data-ar="جهازك، <span>بلا حدود.</span>"></h1>
     <p class="lead" data-en="Control your PC from your phone over your local network. Zero latency, total privacy." data-ar="تحكّم بحاسوبك من هاتفك عبر الشبكة المحلية. بلا تأخير وبخصوصية كاملة."></p>
+    <div class="chips"><span data-en="Free" data-ar="مجاني"></span><span data-en="Open source" data-ar="مفتوح المصدر"></span><span data-en="Local network only" data-ar="شبكة محلية فقط"></span><span data-en="No account" data-ar="بلا حساب"></span></div>
     <div class="btns">
       <a class="btn p" href="https://github.com/mohamedelmaz/smart-remote-app/releases/download/v1.0.0/smart-remote-app.exe" data-en="Download EXE (Windows)" data-ar="تحميل EXE (ويندوز)"></a>
       <a class="btn" href="https://github.com/mohamedelmaz/smart-remote-app/releases/download/v1.0.0/app-release.apk" data-en="Download APK (Android)" data-ar="تحميل APK (أندرويد)"></a>
@@ -110,6 +157,17 @@ h2:after{content:"";display:block;width:56px;height:3px;border-radius:2px;backgr
   </div>
 </header>
 
+<section id="watch">
+  <h2 data-en="Watch it, step by step" data-ar="شاهدها خطوة بخطوة"></h2>
+  <p class="sub" data-en="An interactive walkthrough from download to first connection. Press play, or click any step." data-ar="شرح تفاعلي من التحميل حتى أول اتصال. شغّل العرض أو اضغط على أي خطوة."></p>
+  <div class="player" id="player">
+    <div class="pbar"><span class="dots"><i></i><i></i><i></i></span><b id="ptag"></b><span id="pcount"></span></div>
+    <div class="stage" id="stage"><div class="fig out" id="fig"><img id="pimg" alt=""><span class="hot" id="hot"></span></div></div>
+    <div class="cap"><h3 id="ptitle"></h3><p id="ptext"></p></div>
+    <div class="timeline" id="tl"><i id="tlfill"></i></div>
+    <div class="ctrl"><button id="prev" aria-label="Previous">&#8249;</button><button id="play" aria-label="Play or pause">&#10074;&#10074;</button><button id="next" aria-label="Next">&#8250;</button><button id="spd" aria-label="Speed">1×</button><div class="chapters" id="chips"></div></div>
+  </div>
+</section>
 <section id="features">
   <h2 data-en="Powerful features" data-ar="مميزات قوية"></h2>
   <p class="sub" data-en="Everything you need to run your PC from the couch." data-ar="كل ما تحتاجه للتحكم بحاسوبك من أي مكان في المنزل."></p>
@@ -206,6 +264,51 @@ document.addEventListener('mousemove',e=>{
   const x=(e.clientX/innerWidth-.5)*14,y=(e.clientY/innerHeight-.5)*14;
   pad.style.transform=`perspective(700px) rotateY(${x}deg) rotateX(${-y}deg)`;
 });
+</script>
+<script>
+(function(){
+document.documentElement.classList.add('js');
+var D=9500,SP=1,L=function(){return typeof lang!=='undefined'?lang:'en'};
+var S=[
+['pc','Download the installer','حمّل ملف التثبيت','Open the Smart Remote page on your PC and press Download EXE (Windows). Your browser saves a small file named smart-remote-app.exe in the Downloads folder.','افتح صفحة Smart Remote على حاسوبك واضغط Download EXE (Windows). يحفظ المتصفح ملفاً صغيراً باسم smart-remote-app.exe في مجلد التنزيلات.','Download the installer',50,52],
+['pc','Windows warns you','ويندوز يحذّرك','Windows shows a blue warning because the app is new and not yet signed. This is normal for free software. Click the small More info link, not the big button.','يعرض ويندوز نافذة زرقاء لأن التطبيق جديد وغير موقّع بعد، وهذا طبيعي للبرامج المجانية. اضغط على الرابط الصغير More info وليس على الزر الكبير.','Windows SmartScreen warning',23,30],
+['pc','Run anyway','شغّله على أي حال','A second button appears. Press Run anyway. The server starts immediately: there is nothing to install and no settings window to fill in.','يظهر زر ثانٍ. اضغط Run anyway. يبدأ الخادم فوراً، ولا يوجد تثبيت ولا نافذة إعدادات لتملأها.','Run anyway',50,92],
+['pc','Find it in the tray','ستجده في شريط المهام','Look for the Smart Remote icon near the clock. Click the small arrow if it is hidden. Right-click it to see your PIN and address, or choose Open Dashboard.','ابحث عن أيقونة Smart Remote قرب الساعة، واضغط السهم الصغير إن كانت مخفية. انقر عليها بالزر الأيمن لترى رمز PIN والعنوان، أو اختر Open Dashboard.','Tray menu',42,40],
+['ph','Install the APK','ثبّت ملف APK','On your Android phone, download the APK from this page and open it. When Android asks, tap Install. The app needs no special permission to install.','على هاتف أندرويد، حمّل ملف APK من هذه الصفحة وافتحه. عندما يسأل أندرويد اضغط Install. لا يحتاج التطبيق إلى صلاحيات خاصة للتثبيت.','Open the APK and tap Install',85,89],
+['ph','Play Protect','Play Protect','Google Play Protect has never seen this app because it is not on the Play Store. The message is a recommendation, not an error. Tap More details to see every option.','لم يسبق لـ Google Play Protect أن رأى هذا التطبيق لأنه غير موجود في متجر Play. الرسالة توصية وليست خطأ. اضغط More details لترى كل الخيارات.','Google Play Protect warning',50,62],
+['ph','Install without scanning','التثبيت دون فحص','Choose Install without scanning to finish quickly, or Scan app if you want Google to check it first (this needs internet). Then open Smart Remote from your apps.','اختر Install without scanning لتنتهي بسرعة، أو Scan app إن أردت أن يفحصه Google أولاً (يحتاج إنترنت). ثم افتح Smart Remote من قائمة التطبيقات.','Install without scanning',50,67],
+['go','Connect with IP and PIN','اتصل بالـ IP والـ PIN','Make sure the phone and the PC are on the same Wi-Fi. In the app choose Manual, type the address and the PIN shown on your PC, and you are connected.','تأكد أن الهاتف والحاسوب على نفس الواي فاي. في التطبيق اختر Manual، واكتب العنوان ورمز PIN الظاهرين على حاسوبك، وستتصل.','Web dashboard',27,38]];
+var TAG={pc:['PC · Windows','الحاسوب · ويندوز'],ph:['Phone · Android','الهاتف · أندرويد'],go:['Connect','الاتصال']};
+var $=function(i){return document.getElementById(i)};
+var st=$('stage'),fig=$('fig'),img=$('pimg'),hot=$('hot'),chips=$('chips'),fill=$('tlfill');
+var src=S.map(function(s){var e=document.querySelector('.shot img[alt="'+s[5]+'"],.phone img[alt="'+s[5]+'"]');return e?e.src:''});
+var i=0,el=0,playing=false,user=true,last=0;
+S.forEach(function(s,k){var b=document.createElement('button');b.textContent=k+1;b.onclick=function(){go(k)};chips.appendChild(b)});
+function fit(){var r=img.naturalWidth/img.naturalHeight||1,W=st.clientWidth-28,H=st.clientHeight-28,w=Math.min(W,H*r);fig.style.width=w+'px';fig.style.height=w/r+'px'}
+function render(){var s=S[i],a=L()==='ar'?1:0;
+ fig.classList.add('out');img.alt=s[5];img.src=src[i];
+ $('ptitle').textContent=a?s[2]:s[1];$('ptext').textContent=a?s[4]:s[3];
+ $('ptag').textContent=TAG[s[0]][a];$('pcount').textContent=(i+1)+' / '+S.length;
+ Array.prototype.forEach.call(chips.children,function(b,k){b.classList.toggle('on',k===i)});
+ hot.classList.remove('on');hot.style.left=s[6]+'%';hot.style.top=s[7]+'%';
+ setTimeout(function(){fit();fig.classList.remove('out');void hot.offsetWidth;hot.classList.add('on')},120)}
+function go(k){i=(k+S.length)%S.length;el=0;render()}
+img.onload=fit;window.addEventListener('resize',fit);
+function tick(t){var dt=last?t-last:0;last=t;
+ if(playing){el+=dt*SP;if(el>=D){if(i===S.length-1){playing=false;user=false;$('play').innerHTML='&#9654;';el=D}else go(i+1)}}
+ fill.style.width=((i+Math.min(el/D,1))/S.length*100)+'%';requestAnimationFrame(tick)}
+$('play').onclick=function(){if(!playing&&i===S.length-1&&el>=D)go(0);user=!playing?true:false;playing=!playing;$('play').innerHTML=playing?'&#10074;&#10074;':'&#9654;'};
+$('prev').onclick=function(){go(i-1)};$('next').onclick=function(){go(i+1)};
+$('tl').onclick=function(e){var r=this.getBoundingClientRect(),f=(e.clientX-r.left)/r.width;go(Math.min(S.length-1,Math.floor(f*S.length)))};
+$('spd').onclick=function(){var v=[0.7,1,1.5],k=(v.indexOf(SP)+1)%3;SP=v[k];this.textContent=SP+'×'};
+var oa=window.apply;window.apply=function(){oa();render()};
+render();requestAnimationFrame(tick);
+if('IntersectionObserver' in window){
+ new IntersectionObserver(function(e){var v=e[0].isIntersecting;if(v&&user&&!playing){playing=true;$('play').innerHTML='&#10074;&#10074;'}else if(!v&&playing){playing=false;$('play').innerHTML='&#9654;'}},{threshold:.5}).observe($('player'));
+ var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){var t=x.target;t.classList.add('in');io.unobserve(t);setTimeout(function(){t.classList.remove('rv','in')},900)}})},{threshold:.12});
+ document.querySelectorAll('.card,.trow,.secure,.note').forEach(function(n){n.classList.add('rv');io.observe(n)});
+}
+})();
 </script>
 </body>
 </html>
