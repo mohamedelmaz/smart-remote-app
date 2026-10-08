@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Remote — Your device, extended</title>
 <meta name="description" content="Professional zero-latency LAN remote control for your PC.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23070B16'/><circle cx='32' cy='32' r='18' fill='none' stroke='%2300E5FF' stroke-width='3'/><path d='M27 25v18l5-4 4 8 4-2-4-8h7z' fill='%2300E5FF'/></svg>">
+<link rel="icon" type="image/png" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -29,10 +29,10 @@ h1 span{color:var(--cy);text-shadow:0 0 30px rgba(0,229,255,.5)}
 .btn{padding:13px 26px;border-radius:14px;text-decoration:none;font-weight:600;border:1px solid var(--line);color:var(--tx);background:var(--card);transition:.2s}
 .btn.p{background:var(--cy);color:#04141A;border-color:var(--cy);box-shadow:0 0 28px rgba(0,229,255,.35)}
 .btn:hover{transform:translateY(-2px);border-color:var(--cy)}
-.pad{aspect-ratio:1;max-width:380px;width:100%;margin:auto;border-radius:50%;position:relative;display:grid;place-items:center;
+.pad{aspect-ratio:1;max-width:380px;width:100%;margin:auto;border-radius:20px;position:relative;display:grid;place-items:center;
 background:radial-gradient(circle,rgba(0,229,255,.14),rgba(255,255,255,.02));border:2px solid rgba(0,229,255,.7);
 box-shadow:0 0 50px rgba(0,229,255,.35),inset 0 0 50px rgba(0,229,255,.1);transition:transform .15s;animation:pulse 4s ease-in-out infinite}
-.pad svg{width:34%;filter:drop-shadow(0 0 14px #00E5FF)}
+.pad img{width:60%;height:auto;filter:drop-shadow(0 0 20px #00E5FF)}
 .pad:before,.pad:after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(0,229,255,.25);inset:-18px}
 .pad:after{inset:-40px;border-color:rgba(0,229,255,.1)}
 @keyframes pulse{50%{box-shadow:0 0 80px rgba(0,229,255,.5),inset 0 0 60px rgba(0,229,255,.16)}}
@@ -278,7 +278,7 @@ footer{text-align:start;padding:50px 0 28px;border-top:1px solid var(--line);mar
 <div class="wrap">
 <nav>
   <div class="brand">
-    <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="none" stroke="#00E5FF" stroke-opacity=".3" stroke-width="4"/><circle cx="32" cy="32" r="22" fill="none" stroke="#00E5FF" stroke-width="4" stroke-linecap="round" stroke-dasharray="85 140" transform="rotate(-125 32 32)"/><path d="M27 22v22l6-5 5 10 5-2-5-10h8z" fill="#00E5FF"/></svg>
+    <img src="images/logo.png" alt="Smart Remote" width="34" height="34" style="border-radius:8px;">
     <span>Smart <b>Remote</b></span>
   </div>
   <div class="links"><a href="#watch" data-en="Watch" data-ar="شاهد"></a><a href="#usecases" data-en="Use cases" data-ar="الاستخدامات"></a><a href="#start" data-en="Setup" data-ar="التثبيت"></a><a href="#tour" data-en="App tour" data-ar="جولة التطبيق"></a><a href="#server" data-en="Server" data-ar="الخادم"></a><a href="#faq" data-en="FAQ" data-ar="أسئلة"></a></div>
@@ -304,7 +304,7 @@ footer{text-align:start;padding:50px 0 28px;border-top:1px solid var(--line);mar
     <div class="dv r"><img data-from="Macro deck" alt=""></div>
   </div>
   <div class="pad" id="pad">
-    <svg viewBox="0 0 40 52"><path d="M4 2v40l10-9 8 17 9-4-8-16h14z" fill="#00E5FF"/></svg>
+    <img src="images/logo.png" alt="Smart Remote" width="200" height="200" style="border-radius:16px; box-shadow:0 8px 32px rgba(0,229,255,0.3);">
   </div>
 </header>
 <div class="marq" aria-hidden="true"><div class="mtrack"><span data-en="Touchpad" data-ar="لوحة اللمس"></span><span data-en="Keyboard" data-ar="لوحة المفاتيح"></span><span data-en="Live screen" data-ar="عرض الشاشة"></span><span data-en="Webcam" data-ar="الكاميرا"></span><span data-en="Voice" data-ar="الصوت"></span><span data-en="Macros" data-ar="الماكرو"></span><span data-en="Media keys" data-ar="مفاتيح الوسائط"></span><span data-en="LAN only" data-ar="شبكة محلية فقط"></span><span data-en="Touchpad" data-ar="لوحة اللمس"></span><span data-en="Keyboard" data-ar="لوحة المفاتيح"></span><span data-en="Live screen" data-ar="عرض الشاشة"></span><span data-en="Webcam" data-ar="الكاميرا"></span><span data-en="Voice" data-ar="الصوت"></span><span data-en="Macros" data-ar="الماكرو"></span><span data-en="Media keys" data-ar="مفاتيح الوسائط"></span><span data-en="LAN only" data-ar="شبكة محلية فقط"></span></div></div>
