@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../models/pairing.dart';
 import '../state/discovery.dart';
@@ -21,15 +22,27 @@ class PairingScreen extends ConsumerStatefulWidget {
 class _PairingScreenState extends ConsumerState<PairingScreen> {
   final _hostCtrl = TextEditingController();
   final _pinCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
 
   bool _busy = false;
   bool _scanning = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // Prefill the phone name so a returning user sees (and can keep) it.
+    // Async by nature (disk read); guarded by mounted as always.
+    ref.read(pairingProvider.notifier).loadDeviceName().then((name) {
+      if (mounted && _nameCtrl.text.isEmpty) _nameCtrl.text = name;
+    });
+  }
+
+  @override
   void dispose() {
     _hostCtrl.dispose();
     _pinCtrl.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
@@ -53,6 +66,8 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
       pin: _pinCtrl.text.trim(),
       label: host,
     );
+    // Persisted before pairing so _connect picks it up in the auth frame.
+    await ref.read(pairingProvider.notifier).setDeviceName(_nameCtrl.text);
     final error = await ref.read(pairingProvider.notifier).pair(pairing);
 
     if (!mounted) return;
@@ -79,6 +94,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
       pin: device.pin,
       label: device.name,
     );
+    await ref.read(pairingProvider.notifier).setDeviceName(_nameCtrl.text);
     final error = await ref.read(pairingProvider.notifier).pair(pairing);
 
     if (!mounted) return;
@@ -229,6 +245,19 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
                         labelText: 'PIN',
                         hintText: '6 digits',
                         prefixIcon: Icon(Icons.pin_outlined),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: AppTokens.gapSmall),
+                    TextField(
+                      controller: _nameCtrl,
+                      autocorrect: false,
+                      maxLength: 64,
+                      style: interStyle(15, FontWeight.w400),
+                      decoration: InputDecoration(
+                        labelText: T.of(context).deviceNameLabel,
+                        hintText: T.of(context).deviceNameHint,
+                        prefixIcon: const Icon(Icons.smartphone_outlined),
                         counterText: '',
                       ),
                     ),

@@ -102,6 +102,15 @@ class T {
   String get offline => text('Offline', 'غير متصل');
   String get reconnectNow => text('Reconnect now', 'إعادة الاتصال الآن');
   String get unpair => text('Unpair this PC', 'إلغاء إقران هذا الحاسوب');
+  String get save => text('Save', 'حفظ');
+
+  /// The phone's own name, shown on the PC dashboard device list.
+  String get deviceNameLabel =>
+      text('Device name (optional)', 'اسم جهازك (اختياري)');
+  String get deviceNameHint =>
+      text("e.g. Ahmed's phone", 'مثال: هاتف أحمد');
+  String get renameDevice =>
+      text('Rename this phone', 'إعادة تسمية هذا الهاتف');
 
   String get appKeyboard => text('App keyboard', 'لوحة مفاتيح التطبيق');
   String get phoneKeyboard => text('Phone keyboard', 'لوحة مفاتيح الهاتف');

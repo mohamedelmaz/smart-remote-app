@@ -91,6 +91,20 @@ mobile/_analyze.txt
 _[a-zA-Z0-9]*.txt
 
 # ---------------------------------------------------------------------------
+# Local design material (never committed)
+# ---------------------------------------------------------------------------
+# "assets-smart remote/" holds the logo SOURCES (kept) alongside bulky local
+# material: screenshots, exported site drafts and notes (~10MB). Only the
+# logo sources under description_picture/logo-svg/ and logo-new/ belong in
+# history; the rest would bloat every clone for zero build value.
+assets-smart remote/description_picture/app-pcturese/
+assets-smart remote/description_picture/server-pictures/
+assets-smart remote/description_picture/smart-remote-info.jpg
+assets-smart remote/site-by claude/
+assets-smart remote/smart-remote-logo.svg
+assets-smart remote/totch final.txt
+
+# ---------------------------------------------------------------------------
 # Test / coverage artefacts
 # ---------------------------------------------------------------------------
 coverage/

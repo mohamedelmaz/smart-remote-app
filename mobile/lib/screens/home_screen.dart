@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/strings.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import 'deck_screen.dart';
@@ -171,6 +172,12 @@ class StatusHeader extends ConsumerWidget {
                 onPressed: link?.retryNow,
               ),
               IconButton(
+                tooltip: T.of(context).renameDevice,
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                color: AppColors.textSecondary,
+                onPressed: () => showRenameDialog(context, ref),
+              ),
+              IconButton(
                 tooltip: 'Unpair this PC',
                 icon: const Icon(Icons.logout, size: 20),
                 color: AppColors.textSecondary,
@@ -182,6 +189,55 @@ class StatusHeader extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+/// Renames this phone as shown on the PC dashboard device list.
+///
+/// Saving persists the name and reconnects so the dashboard shows it
+/// immediately. Clearing the field removes the override and the phone falls
+/// back to its OS-reported name. The dialog owns its controller and disposes
+/// it on close, so no state leaks past the dialog's lifetime.
+Future<void> showRenameDialog(BuildContext context, WidgetRef ref) async {
+  final notifier = ref.read(pairingProvider.notifier);
+  final t = T.of(context);
+  final ctrl = TextEditingController(text: notifier.deviceName);
+  try {
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.renameDevice),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          autocorrect: false,
+          maxLength: 64,
+          decoration: InputDecoration(
+            labelText: t.deviceNameLabel,
+            hintText: t.deviceNameHint,
+            counterText: '',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(t.close),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(t.save),
+          ),
+        ],
+      ),
+    );
+    if (save == true && context.mounted) {
+      await notifier.setDeviceName(ctrl.text);
+      // Re-announce with the new name; user-initiated, so the brief
+      // reconnect blip is expected rather than surprising.
+      await notifier.reconnect();
+    }
+  } finally {
+    ctrl.dispose();
   }
 }
 

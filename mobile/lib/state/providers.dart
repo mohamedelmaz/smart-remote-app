@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/remote_link.dart';
+import '../core/device_name.dart';
 import '../core/server_api.dart';
 import '../models/models.dart';
 import '../models/pairing.dart';
@@ -21,6 +22,22 @@ class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
   /// The live link, or null when not paired.
   RemoteLink? get link => _link;
 
+  /// Name this phone reports to the PC (shown on the dashboard device list).
+  ///
+  /// Empty means "not chosen": connections fall back to the pairing label so
+  /// existing installs behave exactly as before. It is read at connect time,
+  /// so renaming applies on the next connection and never disturbs a live
+  /// session.
+  String _deviceName = '';
+  String get deviceName => _deviceName;
+
+  /// OS-reported phone name (e.g. "OPPO CPH1923"), resolved once and cached.
+  ///
+  /// Local call, milliseconds, no permissions - but still done once: a name
+  /// must never add latency to every reconnect.
+  String? _autoName;
+  bool _autoTried = false;
+
   ServerStatus? _lastStatus;
 
   /// The most recent status seen by the background poller.
@@ -37,11 +54,41 @@ class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
   /// remote shell immediately and show the real link state in the header.
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
+    _deviceName = _sanitizeDeviceName(prefs.getString(_deviceKey));
     final saved = Pairing.load(prefs);
     if (saved == null) return;
     state = AsyncValue.data(saved);
     unawaited(_connect(saved));
   }
+
+  /// Loads the saved phone name (used to prefill the pairing form).
+  Future<String> loadDeviceName() async {
+    final prefs = await SharedPreferences.getInstance();
+    _deviceName = _sanitizeDeviceName(prefs.getString(_deviceKey));
+    return _deviceName;
+  }
+
+  /// Persists the phone name. Takes effect on the next connection; the
+  /// active link is deliberately left alone so renaming never drops input.
+  Future<void> setDeviceName(String name) async {
+    _deviceName = _sanitizeDeviceName(name);
+    final prefs = await SharedPreferences.getInstance();
+    if (_deviceName.isEmpty) {
+      await prefs.remove(_deviceKey);
+    } else {
+      await prefs.setString(_deviceKey, _deviceName);
+    }
+  }
+
+  /// A dashboard row stays readable: one line, bounded, matching what the
+  /// server enforces (it truncates at 64 as defence in depth).
+  static String _sanitizeDeviceName(String? name) {
+    var clean = (name ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (clean.length > 64) clean = clean.substring(0, 64).trim();
+    return clean;
+  }
+
+  static const String _deviceKey = 'smart_remote.device_name';
 
   /// Pairs with a device and starts the control link.
   ///
@@ -104,7 +151,24 @@ class PairingNotifier extends StateNotifier<AsyncValue<Pairing?>> {
       if (status != null) _lastStatus = status;
     });
 
-    await link.connect(pin: pairing.pin, deviceName: pairing.label);
+    await link.connect(
+        pin: pairing.pin, deviceName: await _resolvedDeviceName(pairing));
+  }
+
+  /// The name sent in the auth frame, by priority:
+  /// 1. the user's explicit choice (rename wins over everything),
+  /// 2. the phone's own OS-reported name (the actual device),
+  /// 3. the pairing label exactly as before (zero behaviour change when
+  ///    neither is available, e.g. very old installs or exotic devices).
+  Future<String> _resolvedDeviceName(Pairing pairing) async {
+    if (_deviceName.isNotEmpty) return _deviceName;
+    if (!_autoTried) {
+      _autoTried = true;
+      _autoName = await DeviceNames.auto();
+    }
+    final auto = (_autoName ?? '').trim();
+    if (auto.isNotEmpty) return auto;
+    return pairing.label;
   }
 
   @override

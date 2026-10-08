@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Remote — Dashboard</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -69,11 +70,14 @@
       <p class="note danger" id="input-diagnosis" hidden></p>
     </section>
 
-    <!-- Macros -->
-    <section class="card card-macros">
-      <h2>Macro deck</h2>
-      <button class="btn btn-small" id="btn-reload">Reload</button>
-      <ul class="macro-list" id="macros"></ul>
+    <!-- Connected devices: name + address + time per channel, not just a count -->
+    <section class="card" id="card-devices">
+      <h2>Connected devices</h2>
+      <p class="hint" id="devices-hint">No phones connected yet.</p>
+      <ul class="device-list" id="devices"></ul>
+      <h2 class="subhead" id="blocked-head" hidden>Blocked devices</h2>
+      <p class="hint" id="blocked-hint" hidden>Blocked phones are refused even with the right PIN.</p>
+      <ul class="device-list" id="blocked"></ul>
     </section>
 
   </main>

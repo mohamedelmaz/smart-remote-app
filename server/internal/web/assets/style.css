@@ -99,7 +99,7 @@ html, body {
 /* ---- Layout ---- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
   align-items: start;
 }
@@ -194,35 +194,109 @@ html, body {
 .status-line.ok { color: var(--success); }
 .status-line.bad { color: var(--error); }
 
-/* ---- Macros ---- */
-.card-macros .btn { margin-bottom: 14px; }
-
-.macro-list {
+/* ---- Devices ---- */
+.device-list {
   list-style: none;
-  margin: 0;
+  margin: 12px 0 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
-.macro-item {
+.device-list:empty { display: none; }
+
+.device-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 14px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
   border-radius: 12px;
   background: var(--glass-strong);
   border: 1px solid var(--border);
-  transition: border-color var(--transition);
 }
 
-.macro-item:hover { border-color: rgba(0, 229, 255, 0.35); }
+.device-item .avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+}
 
-/* The label is the authoritative identifier; the icon is decorative and may
-   fail to render, so it is never the only signal. */
-.macro-item .label { font-size: 14px; font-weight: 600; }
-.macro-item .kind { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; }
+.device-item .meta { flex: 1; min-width: 0; }
+.device-item .name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.device-item .sub {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.device-item .badge {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 136, 0.35);
+  color: var(--success);
+}
+
+.device-item.pending .badge {
+  border-color: rgba(255, 149, 0, 0.4);
+  color: var(--warning);
+}
+
+/* Blocked rows and the per-row Block action. Danger styling is reserved for
+   this one destructive dashboard action so it stays unmistakable. */
+.device-item.blocked-row {
+  border-color: rgba(255, 68, 68, 0.30);
+}
+
+.device-item .avatar.muted {
+  color: var(--text-2);
+  background: var(--glass-strong);
+  border-color: var(--border);
+}
+
+.btn-danger {
+  background: rgba(255, 68, 68, 0.12);
+  border-color: rgba(255, 68, 68, 0.45);
+  color: var(--error);
+  box-shadow: none;
+}
+
+.btn-danger:hover {
+  border-color: var(--error);
+  box-shadow: 0 0 18px rgba(255, 68, 68, 0.25);
+}
+
+.device-item .btn {
+  flex: none;
+  margin-bottom: 0;
+}
+
+.card .subhead {
+  margin: 20px 0 6px;
+}
 
 /* ---- Footer ---- */
 .foot {
@@ -234,9 +308,14 @@ html, body {
   text-align: center;
 }
 
+@media (max-width: 960px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 560px) {
   .shell { padding: 24px 16px 36px; }
   .card { padding: 20px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

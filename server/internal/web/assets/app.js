@@ -41,8 +41,12 @@ function renderStatus(s) {
     ? `${s.display.width}Ã—${s.display.height} @ ${s.display.refreshHz}Hz`
     : 'â€”';
 
-  setPill('pill-server', 'ok', 'Server');
-  setPill('pill-clients', s.clients > 0 ? 'ok' : 'warn', `${s.clients} clients`);
+  const serving = s.serving !== false;
+  setPill('pill-server', serving ? 'ok' : 'warn', serving ? 'Server' : 'Stopped');
+  const deviceCount = Array.isArray(s.devices) ? s.devices.length : (s.clients || 0);
+  setPill('pill-clients', deviceCount > 0 ? 'ok' : 'warn', `${deviceCount} clients`);
+  renderDevices(s.devices || [], serving);
+  renderBlocked(s.blocked || [], !!s.blockCorrupt);
 
   // appVersion and developer are sent by /api/panel/status. They are optional
   // so an older server still renders a footer rather than printing "undefined".
@@ -52,6 +56,123 @@ function renderStatus(s) {
   $('foot-stats').textContent =
     `${s.commandsRun} commands Â· ${s.commandsFailed} failed Â· ` +
     `${s.macroCount} macros Â· protocol ${s.version}${rel}${by}`;
+}
+
+/** Render one row per connected device: name + address + time, never a bare count. */
+function renderDevices(devices, serving) {
+  const list = $('devices');
+  const hint = $('devices-hint');
+  if (!list || !hint) return;
+  list.textContent = '';
+  if (!serving) {
+    hint.textContent = 'Server stopped from tray - press Activate server to resume.';
+  } else if (devices.length === 0) {
+    hint.textContent = 'No phones connected yet.';
+  } else {
+    hint.textContent = `${devices.length} phone${devices.length === 1 ? '' : 's'} connected.`;
+  }
+  devices.forEach((d) => {
+    const li = document.createElement('li');
+    li.className = 'device-item' + (d.authenticated ? '' : ' pending');
+
+    // textContent everywhere: a hostile device name can never inject markup.
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar';
+    const label = (d.name || '').trim() || 'Unknown device';
+    avatar.textContent = label.slice(0, 1).toUpperCase();
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = label;
+    const sub = document.createElement('div');
+    sub.className = 'sub mono';
+    const when = d.connectedAt ? ` - ${d.connectedAt}` : '';
+    sub.textContent = `${d.addr || 'unknown address'}${when}`;
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = d.authenticated ? 'Paired' : 'Pairing';
+
+    const block = document.createElement('button');
+    block.className = 'btn btn-small btn-danger';
+    block.textContent = 'Block';
+    block.setAttribute('aria-label', `Block ${label}`);
+    block.addEventListener('click', () => setBlocked(d.addr, d.name || label, true));
+
+    meta.append(name, sub);
+    li.append(avatar, meta, badge, block);
+    list.appendChild(li);
+  });
+}
+
+/** Render the refused IPs with an Unblock action each. */
+function renderBlocked(blocked, corrupt) {
+  const list = $('blocked');
+  const head = $('blocked-head');
+  const hint = $('blocked-hint');
+  if (!list || !head || !hint) return;
+  list.textContent = '';
+  head.hidden = blocked.length === 0 && !corrupt;
+  if (corrupt) {
+    hint.hidden = false;
+    hint.textContent = 'The block file was corrupt and was reset; the list started empty.';
+  } else if (blocked.length > 0) {
+    hint.hidden = false;
+    hint.textContent = 'Blocked phones are refused even with the right PIN.';
+  } else {
+    hint.hidden = true;
+  }
+  blocked.forEach((b) => {
+    const li = document.createElement('li');
+    li.className = 'device-item blocked-row';
+
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar muted';
+    const label = (b.name || '').trim() || b.ip || 'Unknown device';
+    avatar.textContent = label.slice(0, 1).toUpperCase();
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = label;
+    const sub = document.createElement('div');
+    sub.className = 'sub mono';
+    const when = b.blockedAt ? ` - ${b.blockedAt}` : '';
+    sub.textContent = `${b.ip || 'unknown address'}${when}`;
+
+    const unblock = document.createElement('button');
+    unblock.className = 'btn btn-small';
+    unblock.textContent = 'Unblock';
+    unblock.setAttribute('aria-label', `Unblock ${label}`);
+    unblock.addEventListener('click', () => setBlocked(b.ip, '', false));
+
+    meta.append(name, sub);
+    li.append(avatar, meta, unblock);
+    list.appendChild(li);
+  });
+}
+
+/** Block or unblock one IP, then refresh immediately so the UI never lies. */
+async function setBlocked(ip, name, block) {
+  try {
+    const res = await fetch(block ? '/api/devices/block' : '/api/devices/unblock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(block ? { ip, name } : { ip }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || res.statusText);
+    }
+  } catch (err) {
+    const hint = $('devices-hint');
+    if (hint) hint.textContent = 'Could not update block: ' + err.message;
+    return;
+  }
+  refresh();
 }
 
 /** Reflect input health, including the UIPI diagnosis when blocked. */
@@ -89,35 +210,6 @@ async function renderNet() {
     list.appendChild(li);
   });
 }
-
-async function renderMacros() {
-  let macros;
-  try {
-    macros = await getJSON('/api/macros');
-  } catch {
-    return;
-  }
-  const list = $('macros');
-  list.textContent = '';
-  macros.forEach((m) => {
-    const li = document.createElement('li');
-    li.className = 'macro-item';
-
-    // The label is the primary signal and the kind is secondary. An icon is
-    // deliberately not used as the only identifier.
-    const label = document.createElement('span');
-    label.className = 'label';
-    label.textContent = m.label;
-
-    const kind = document.createElement('span');
-    kind.className = 'kind';
-    kind.textContent = m.kind;
-
-    li.append(label, kind);
-    list.appendChild(li);
-  });
-}
-
 
 async function copyPin() {
   const pin = $('pin').textContent.trim();
@@ -184,10 +276,11 @@ function connect() {
       return;
     }
     // Events prompt an immediate refresh so the dashboard is never stale.
-    if (msg.kind === 'pin_changed') refresh();
-    if (msg.kind === 'macros_changed' || msg.kind === 'clients_changed') {
+    // (The macro count in the footer refreshes here too; the deck itself
+    // lives on the phone, which reads /api/macros directly.)
+    if (msg.kind === 'pin_changed' || msg.kind === 'macros_changed' ||
+        msg.kind === 'clients_changed' || msg.kind === 'blocked_changed') {
       refresh();
-      renderMacros();
     }
   };
 }
@@ -205,13 +298,8 @@ async function refresh() {
 function init() {
   $('btn-copy').addEventListener('click', copyPin);
   $('btn-regen').addEventListener('click', regeneratePin);
-  $('btn-reload').addEventListener('click', () => {
-    renderMacros();
-    renderNet();
-  });
 
   refresh();
-  renderMacros();
   renderNet();
   connect();
   setInterval(refresh, POLL_MS);

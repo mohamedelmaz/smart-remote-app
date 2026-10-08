@@ -24,6 +24,16 @@ type TrayConfig struct {
 	// OnQuit is called when the user picks Quit.
 	OnQuit func()
 
+	// OnToggleServing flips the Close/Activate state. It receives true when
+	// the user asks to activate and returns the state that actually took
+	// effect, so the menu label can never claim something that did not
+	// happen. Nil means the menu item is hidden (older callers).
+	OnToggleServing func(activate bool) bool
+
+	// Serving is the initial Close/Activate state, used to render the
+	// correct label before the first click.
+	Serving bool
+
 	// OnRegenerate is called when the user asks for a new PIN. It is
 	// responsible for calling UpdatePIN once the new value is known.
 	OnRegenerate func() string
@@ -121,7 +131,28 @@ func onTrayReady(cfg TrayConfig) {
 	startupItem.Uncheck()
 	setStartupCheck(startupItem, cfg.StartupEnabled)
 
+	// Close/Activate stops the server without quitting the process, so the
+	// user never needs to reinstall after pressing Quit by mistake. While
+	// stopped the tray stays alive with an "Activate server" label; pressing
+	// it re-arms the same listener, so resume cannot fail on a stolen port.
+	var mServing *systray.MenuItem
+	serving := cfg.Serving
+	if cfg.OnToggleServing != nil {
+		// Default to serving when the caller did not say: a fresh server is
+		// always live, and hiding behind "Activate" on first run would look
+		// like a broken start.
+		if !serving {
+			serving = true
+		}
+		mServing = systray.AddMenuItem(servingLabel(serving), servingTooltip(serving))
+	}
+
 	mQuit := systray.AddMenuItem("Quit", "Exit Smart Remote")
+
+	var servingCh chan struct{}
+	if mServing != nil {
+		servingCh = mServing.ClickedCh
+	}
 
 	go func() {
 		for {
@@ -157,6 +188,18 @@ func onTrayReady(cfg TrayConfig) {
 
 				setStartupCheck(startupItem, actual)
 				startupItem.SetTitle(startupLabel(actual))
+
+			case <-servingCh:
+				if mServing == nil || cfg.OnToggleServing == nil {
+					continue
+				}
+				// Ask for the opposite of what the label currently claims,
+				// then adopt whatever actually took effect.
+				actual := cfg.OnToggleServing(!serving)
+				serving = actual
+				mServing.SetTitle(servingLabel(actual))
+				mServing.SetTooltip(servingTooltip(actual))
+				cfg.Logger.Printf("tray: serving=%t", actual)
 
 			case <-mQuit.ClickedCh:
 				cfg.Logger.Printf("tray: quit requested")
@@ -194,6 +237,24 @@ func startupLabel(enabled bool) string {
 		return "Disable: start with Windows"
 	}
 	return "Run on Windows Startup"
+}
+
+// servingLabel renders the Close/Activate toggle. The label always names the
+// action the click will take, never the current state, so the user can tell
+// what will happen before pressing it.
+func servingLabel(serving bool) string {
+	if serving {
+		return "Close server"
+	}
+	return "Activate server"
+}
+
+// servingTooltip explains the toggle outcome for assistive readers.
+func servingTooltip(serving bool) string {
+	if serving {
+		return "Stop accepting phones without quitting Smart Remote"
+	}
+	return "Resume accepting phones on the same address"
 }
 
 // TrayStarted reports whether the tray icon was successfully created.

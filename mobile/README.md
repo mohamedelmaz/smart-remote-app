@@ -10,7 +10,7 @@ The pairing and About screens use `assets/branding/logo.png`. Convert the
 provided source JPEG to that asset from the repository root with PowerShell:
 
 ```powershell
-$source = 'C:\Users\elmam\Desktop\assets-smart remote\smart-remote-logo.jpg'
+$source = '..\assets-smart remote\logo-new\smart-remote-tile.jpg'
 $target = 'mobile\assets\branding\logo.png'
 Add-Type -AssemblyName System.Drawing
 $image = [System.Drawing.Image]::FromFile($source)

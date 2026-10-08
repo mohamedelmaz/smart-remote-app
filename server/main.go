@@ -119,11 +119,12 @@ func main() {
 
 	// ---- Server ----------------------------------------------------------
 	srv := remote.NewServer(remote.ServerOptions{
-		Port:     *port,
-		Logger:   logger,
-		Auth:     auth,
-		Dispatch: dispatcher,
-		Audio:    sink,
+		Port:      *port,
+		Logger:    logger,
+		Auth:      auth,
+		Dispatch:  dispatcher,
+		Audio:     sink,
+		BlockFile: filepath.Join(configDir, "blocklist.json"),
 	})
 
 	responder := remote.NewMDNSResponder(
@@ -217,7 +218,12 @@ func main() {
 		Address:      fmt.Sprintf("%s:%d", host, srv.Port()),
 		DashboardURL: dashboardURL,
 		Logger:       logger,
-		OnQuit:       func() { requestQuit("tray") },
+		Serving:      true,
+		OnToggleServing: func(activate bool) bool {
+			srv.SetServing(activate)
+			return srv.IsServing()
+		},
+		OnQuit: func() { requestQuit("tray") },
 		OnRegenerate: func() string {
 			newPin, err := auth.Regenerate()
 			if err != nil {

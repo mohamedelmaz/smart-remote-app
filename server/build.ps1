@@ -37,7 +37,7 @@ function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 # --- 1. Source logo -> multi-resolution .ico -------------------------------
 # Keeping this in the build is what stops the icon drifting from the logo: the
 # .ico is a generated artefact, not something to remember to regenerate.
-$logo = 'C:\Users\elmam\Desktop\assets-smart remote\smart-remote-logo.jpg'
+$logo = Join-Path $PSScriptRoot '..\assets-smart remote\logo-new\smart-remote-tile.jpg'
 $ico  = 'internal\remote\assets\smartremote.ico'
 
 if (Test-Path $logo) {
