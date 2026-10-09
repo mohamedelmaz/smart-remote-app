@@ -109,3 +109,17 @@ assets-smart remote/totch final.txt
 # ---------------------------------------------------------------------------
 coverage/
 *.coverprofile
+
+# ---------------------------------------------------------------------------
+# Task scratch capture output (temporary logs and screenshots)
+# ---------------------------------------------------------------------------
+# Captured command/test/analyze output and phone screenshots land in the repo
+# root while working; they are throwaway and must never be committed.
+bld.txt
+devinfo.txt
+pair_shot*.png
+analyze_*.txt
+test_*.txt
+diff_*.txt
+mutant_*.txt
+status_*.txt
