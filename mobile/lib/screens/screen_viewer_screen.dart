@@ -12,6 +12,7 @@ import '../core/server_api.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/zoomable_frame.dart';
 import 'pairing_screen.dart';
 
 /// Live view of the PC's screen, framed from the MJPEG stream.
@@ -59,9 +60,6 @@ class _ScreenViewerScreenState extends ConsumerState<ScreenViewerScreen> {
 
   /// The most recently decoded frame, or null before the first one arrives.
   ui.Image? _frame;
-
-  /// Changes on every decoded frame so the viewport repaints.
-  int _sequence = 0;
 
   /// True while a stream request is in flight.
   bool _connecting = false;
@@ -261,7 +259,6 @@ class _ScreenViewerScreenState extends ConsumerState<ScreenViewerScreen> {
         setState(() {
           final previous = _frame;
           _frame = info.image;
-          _sequence++;
           previous?.dispose();
         });
       }).catchError((Object error) {
@@ -319,26 +316,19 @@ class _ScreenViewerScreenState extends ConsumerState<ScreenViewerScreen> {
       child: Center(
         child: frame == null
             ? _placeholder()
+            // ZoomableFrame owns the InteractiveViewer transform so pinch, pan and
+            // double-tap survive per-frame rebuilds. It must NOT carry a
+            // changing key: recreating it per frame would reset the zoom.
             // RawImage draws an already-decoded ui.Image directly. Image.memory
             // would decode the JPEG again on the UI thread for every frame,
             // which at 15fps of a full desktop is enough to make the whole app
             // feel stuck.
             //
-            // The AspectRatio wrapper preserves the PC's true geometry: letter-
+            // The AspectRatio inside preserves the PC's true geometry: letter-
             // boxing to the phone's shape would misrepresent the screen, and
             // the user needs real proportions to judge what they are clicking
             // through the touchpad.
-            : AspectRatio(
-                key: ValueKey(_sequence),
-                aspectRatio: frame.width / frame.height,
-                child: RawImage(
-                  image: frame,
-                  // contain, not fill: stretching a mirrored desktop would make
-                  // it look distorted even though the PC is fine.
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
+            : SizedBox.expand(child: ZoomableFrame(frame: frame)),
       ),
     );
   }

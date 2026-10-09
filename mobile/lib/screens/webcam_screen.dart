@@ -12,6 +12,7 @@ import '../core/server_api.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/zoomable_frame.dart';
 // HintText is declared in pairing_screen.dart rather than in the shared
 // widgets, and screen_viewer_screen.dart imports it from the same place.
 import 'pairing_screen.dart';
@@ -47,9 +48,6 @@ const Duration _webcamFirstFrameTimeout = Duration(seconds: 12);
 class _WebcamScreenState extends ConsumerState<WebcamScreen> {
   /// The most recently decoded frame, or null before the first one arrives.
   ui.Image? _frame;
-
-  /// Changes on every decoded frame so the viewport repaints.
-  int _sequence = 0;
 
   /// True while a stream request is in flight.
   bool _connecting = false;
@@ -302,7 +300,6 @@ class _WebcamScreenState extends ConsumerState<WebcamScreen> {
         setState(() {
           final previous = _frame;
           _frame = info.image;
-          _sequence++;
           previous?.dispose();
         });
       }).catchError((Object error) {
@@ -340,23 +337,17 @@ class _WebcamScreenState extends ConsumerState<WebcamScreen> {
       child: Center(
         child: frame == null
             ? _placeholder()
+            // ZoomableFrame owns the InteractiveViewer transform so pinch, pan and
+            // double-tap survive per-frame rebuilds. It must NOT carry a
+            // changing key: recreating it per frame would reset the zoom.
             // RawImage draws an already-decoded ui.Image directly. Image.memory
             // would decode the JPEG again on the UI thread for every frame,
             // which at 15fps is enough to make the whole app feel stuck.
             //
-            // AspectRatio preserves the camera's true geometry: letterboxing to
-            // the phone's shape would misrepresent what the camera sees.
-            : AspectRatio(
-                key: ValueKey(_sequence),
-                aspectRatio: frame.width / frame.height,
-                child: RawImage(
-                  image: frame,
-                  // contain, not fill: stretching the picture would make it
-                  // look distorted even though the camera is fine.
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.medium,
-                ),
-              ),
+            // AspectRatio inside preserves the camera's true geometry:
+            // letterboxing to the phone's shape would misrepresent what the
+            // camera sees.
+            : SizedBox.expand(child: ZoomableFrame(frame: frame)),
       ),
     );
   }
