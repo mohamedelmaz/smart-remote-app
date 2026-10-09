@@ -138,6 +138,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
               // decorative, so it carries an empty semantics label rather than
               // being announced as an unlabelled image.
               Stack(
+                alignment: Alignment.topCenter,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
