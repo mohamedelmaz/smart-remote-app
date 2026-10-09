@@ -137,31 +137,35 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
               // screen: everything else is the pairing form itself. The logo is
               // decorative, so it carries an empty semantics label rather than
               // being announced as an unlabelled image.
-              Row(
+              Stack(
                 children: [
-                  const BrandLogo(size: 56),
-                  const SizedBox(width: AppTokens.gap),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Smart Remote',
-                            style: interStyle(30, FontWeight.w700)),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Find your PC, then use the PIN it shows on its '
-                          'dashboard.',
-                          style: interStyle(14, FontWeight.w400,
-                              color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Center(child: BrandLogo()),
+                      const SizedBox(height: AppTokens.gap),
+                      Center(
+                        child: Text('Smart Remote',
+                            style: interStyle(22, FontWeight.w700)),
+                      ),
+                      const SizedBox(height: AppTokens.gapSmall),
+                      Text(
+                        'Find your PC, then use the PIN it shows on its '
+                        'dashboard.',
+                        textAlign: TextAlign.center,
+                        style: interStyle(14, FontWeight.w400,
+                            color: AppColors.textSecondary),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: 'Info',
-                    icon: const Icon(Icons.info_outline, size: 22),
-                    color: AppColors.textSecondary,
-                    onPressed: () => showInfoSheet(context),
+                  Align(
+                    alignment: AlignmentDirectional.topEnd,
+                    child: IconButton(
+                      tooltip: 'Info',
+                      icon: const Icon(Icons.info_outline, size: 22),
+                      color: AppColors.textSecondary,
+                      onPressed: () => showInfoSheet(context),
+                    ),
                   ),
                 ],
               ),
