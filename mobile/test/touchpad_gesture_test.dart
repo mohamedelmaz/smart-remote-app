@@ -201,10 +201,12 @@ void main() {
     expect(link.clicks, ['right']);
   });
 
-  testWidgets('a new gesture clears any button the PC still holds',
+  testWidgets('a new gesture never fires a spurious button-up',
       (WidgetTester tester) async {
-    // A stranded button is what makes the pad feel broken: every subsequent
-    // movement then selects text on the PC. Every gesture start clears it.
+    // The contract was deliberately changed: releaseInput() on EVERY touch
+    // sent a stray right-button-up to Windows, which popped Chrome's context
+    // menu mid-swipe. A gesture start must therefore emit nothing at all -
+    // recovery lives in the "Release held buttons" action instead.
     await pumpPad(tester);
 
     final first = await tester.startGesture(padCentre(tester), pointer: 1);
@@ -221,7 +223,51 @@ void main() {
     await second.up();
     await tester.pump();
 
-    expect(link.types.first, 'input.release',
-        reason: 'a gesture must start by clearing any held button');
+    expect(link.types.first, 'mouse.move',
+        reason: 'a gesture may move the cursor, but must never open with a '
+            'button command');
+    expect(link.types, isNot(contains('input.release')),
+        reason: 'release-on-every-touch is what opened the Windows context '
+            'menu during a swipe');
+    expect(link.types, isNot(contains('mouse.up')),
+        reason: 'a stray button-up is exactly what reopens the context menu');
+    expect(link.types, isNot(contains('mouse.down')));
+  });
+
+  testWidgets('a held drag is pressed and released cleanly',
+      (WidgetTester tester) async {
+    // The safety the old release-on-touch test was guarding: when a button is
+    // deliberately held (Drag Mode), its mouse.down must always be matched by
+    // a mouse.up when the gesture ends - never a stranded left button.
+    await pumpPad(tester);
+    await tester.tap(find.text('Drag mode: OFF'));
+    await tester.pump();
+    expect(find.text('Drag mode: ON'), findsOneWidget);
+
+    final gesture = await tester.startGesture(padCentre(tester), pointer: 1);
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(40, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(link.types, contains('mouse.down'),
+        reason: 'travel past the threshold in Drag Mode must hold the button');
+    expect(link.types.last, 'mouse.up');
+    expect(link.sent.last['button'], 'left');
+    expect(link.clicks, isEmpty, reason: 'a drag must not also click');
+  });
+
+  testWidgets('input.release is sent by the explicit release action',
+      (WidgetTester tester) async {
+    // Stranded-button recovery is now a user action, not a per-gesture side
+    // effect. This pins where the recovery command actually lives.
+    await pumpPad(tester);
+
+    await tester.tap(find.text('Release held buttons'));
+    await tester.pump();
+
+    expect(link.types, contains('input.release'));
   });
 }
