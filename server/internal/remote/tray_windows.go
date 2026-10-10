@@ -52,8 +52,33 @@ type TrayConfig struct {
 	// initial label and tick.
 	StartupEnabled bool
 
+	// LockEnabled is the security lock state at startup, used to render the
+	// lock item's label and to decide whether the PIN and address are shown.
+	LockEnabled bool
+
+	// OnOpenLock is called when the security-lock item is clicked. It returns
+	// the URL to open: the lock card when the lock is off, the code form when
+	// it is on. Returning "" opens nothing.
+	OnOpenLock func(enabled bool) string
+
 	// Logger receives diagnostics. Must not be nil.
 	Logger *log.Logger
+}
+
+// trayApplyLock is the live handle the server uses to redraw the menu when the
+// lock is switched on or off from the dashboard, with no restart.
+//
+// It is a package variable because the menu items only exist inside onTrayReady
+// and RunTray blocks on the main thread; this is the same handle the click loop
+// already uses when it calls SetTitle on a menu item from its own goroutine.
+var trayApplyLock func(enabled bool)
+
+// SetTrayLockState refreshes the menu for a new lock state. It is safe to call
+// before the tray exists, in which case it does nothing.
+func SetTrayLockState(enabled bool) {
+	if trayApplyLock != nil {
+		trayApplyLock(enabled)
+	}
 }
 
 // trayStarted records whether systray actually created an icon.
@@ -92,7 +117,7 @@ func onTrayReady(cfg TrayConfig) {
 	icon := trayIconData(cfg.Logger)
 	systray.SetIcon(icon)
 	systray.SetTitle("Smart Remote")
-	systray.SetTooltip(fmt.Sprintf("Smart Remote - PIN: %s", cfg.PIN))
+	systray.SetTooltip(trayTooltipText(cfg.PIN, cfg.LockEnabled))
 
 	header := systray.AddMenuItem("Smart Remote", "Control this PC from your phone")
 	header.Disable()
@@ -113,6 +138,10 @@ func onTrayReady(cfg TrayConfig) {
 	mPanel := systray.AddMenuItem("Open Dashboard", cfg.DashboardURL)
 
 	mRegen := systray.AddMenuItem("New PIN", "Generate a new pairing PIN")
+
+	// The security lock sits with the other owner actions, between New PIN and
+	// the startup toggle, so it is found where the PIN used to be.
+	lockItem := systray.AddMenuItem(lockLabel(cfg.LockEnabled), lockTooltip(cfg.LockEnabled))
 
 	systray.AddSeparator()
 
@@ -154,27 +183,86 @@ func onTrayReady(cfg TrayConfig) {
 		servingCh = mServing.ClickedCh
 	}
 
+	// locked is the state the click handlers consult, so every branch reads the
+	// same value the menu is currently showing.
+	locked := cfg.LockEnabled
+
+	// applyLockState redraws the menu for a lock state. While the lock is on
+	// the PIN and the address are hidden outright rather than merely disabled:
+	// a disabled row is still readable on screen.
+	applyLockState := func(on bool) {
+		locked = on
+		lockItem.SetTitle(lockLabel(on))
+		lockItem.SetTooltip(lockTooltip(on))
+		if on {
+			pinItem.Hide()
+			addrItem.Hide()
+			mCopy.Hide()
+			startupItem.Hide()
+			return
+		}
+		pinItem.Show()
+		addrItem.Show()
+		mCopy.Show()
+		startupItem.Show()
+		pinItem.Disable()
+		addrItem.Disable()
+	}
+	trayApplyLock = func(on bool) { applyLockState(on) }
+	applyLockState(cfg.LockEnabled)
+
+	// openLocked sends the browser to a dashboard screen instead of acting.
+	// The action is only carried in the URL: nothing happens until the owner
+	// types the code and confirms on the page.
+	openLocked := func(fragment string) {
+		OpenBrowser(cfg.DashboardURL+fragment, cfg.Logger)
+	}
+
 	go func() {
 		for {
 			select {
 			case <-mCopy.ClickedCh:
+				if locked {
+					continue
+				}
 				if err := clipboardSet(cfg.Address); err != nil {
 					cfg.Logger.Printf("tray: could not copy address: %v", err)
 				}
 			case <-mPanel.ClickedCh:
+				if locked {
+					openLocked("#unlock")
+					continue
+				}
 				OpenBrowser(cfg.DashboardURL, cfg.Logger)
+			case <-lockItem.ClickedCh:
+				if cfg.OnOpenLock != nil {
+					if url := cfg.OnOpenLock(locked); url != "" {
+						OpenBrowser(url, cfg.Logger)
+					}
+				}
 			case <-mRegen.ClickedCh:
+				if locked {
+					openLocked("#do=newpin")
+					continue
+				}
 				if cfg.OnRegenerate == nil {
 					continue
 				}
 				// Only update the label once regeneration has actually
 				// succeeded, so the menu never advertises a stale PIN.
 				if pin := cfg.OnRegenerate(); pin != "" {
-					systray.SetTooltip(fmt.Sprintf("Smart Remote - PIN: %s", pin))
+					if locked {
+						systray.SetTooltip("Smart Remote - PIN: hidden (lock on)")
+					} else {
+						systray.SetTooltip(fmt.Sprintf("Smart Remote - PIN: %s", pin))
+					}
 					pinItem.SetTitle(fmt.Sprintf("PIN: %s", pin))
 					cfg.Logger.Printf("tray: PIN regenerated")
 				}
 			case <-startupItem.ClickedCh:
+				if locked {
+					continue
+				}
 				if cfg.OnToggleStartup == nil {
 					continue
 				}
@@ -193,6 +281,10 @@ func onTrayReady(cfg TrayConfig) {
 				if mServing == nil || cfg.OnToggleServing == nil {
 					continue
 				}
+				if locked {
+					openLocked("#do=toggle")
+					continue
+				}
 				// Ask for the opposite of what the label currently claims,
 				// then adopt whatever actually took effect.
 				actual := cfg.OnToggleServing(!serving)
@@ -202,6 +294,10 @@ func onTrayReady(cfg TrayConfig) {
 				cfg.Logger.Printf("tray: serving=%t", actual)
 
 			case <-mQuit.ClickedCh:
+				if locked {
+					openLocked("#do=quit")
+					continue
+				}
 				cfg.Logger.Printf("tray: quit requested")
 				if cfg.OnQuit != nil {
 					cfg.OnQuit()
@@ -211,6 +307,30 @@ func onTrayReady(cfg TrayConfig) {
 			}
 		}
 	}()
+}
+
+// trayTooltipText keeps the PIN out of the hover text while the lock is on.
+func trayTooltipText(pin string, locked bool) string {
+	if locked {
+		return "Smart Remote - PIN: hidden (lock on)"
+	}
+	return fmt.Sprintf("Smart Remote - PIN: %s", pin)
+}
+
+// lockLabel names the security lock item after what a click will do, the same
+// convention the startup and serving items use.
+func lockLabel(on bool) string {
+	if on {
+		return "Security lock: On"
+	}
+	return "Security lock: Off - Set code..."
+}
+
+func lockTooltip(on bool) string {
+	if on {
+		return "The dashboard asks for a code before it shows anything"
+	}
+	return "Ask for a code before the dashboard shows the PIN"
 }
 
 // setStartupCheck applies the tick state to the startup menu item.

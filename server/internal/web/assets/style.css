@@ -203,6 +203,12 @@ html, body {
   gap: 10px;
   max-height: 260px;
   overflow-y: auto;
+  /* overflow-x:hidden is not cosmetic. Per CSS, declaring overflow-y:auto
+   * while overflow-x is visible makes the computed overflow-x become auto,
+   * so any horizontal overflow produced a scrollbar pinned under the 260px
+   * box - which is what visually cut off the Block button and the PAIRED
+   * badge. */
+  overflow-x: hidden;
 }
 
 .device-list:empty { display: none; }
@@ -215,6 +221,11 @@ html, body {
   border-radius: 12px;
   background: var(--glass-strong);
   border: 1px solid var(--border);
+  /* This row is a grid item of .device-list, and a grid item's automatic
+   * minimum size is its min-content width. Without min-width:0 the row
+   * refused to shrink below the width of its widest text, so a long device
+   * name pushed the Block button and the PAIRED badge past the card edge. */
+  min-width: 0;
 }
 
 .device-item .avatar {
@@ -234,6 +245,12 @@ html, body {
 
 .device-item .meta { flex: 1; min-width: 0; }
 .device-item .name {
+  /* The element is a <span>, i.e. inline, and overflow/text-overflow do
+   * nothing on a non-replaced inline box. The long device name therefore
+   * painted straight over the PAIRED badge and the Block button, and its own
+   * full width was what made .device-list scroll sideways. display:block is
+   * what gives the ellipsis below something to work on. */
+  display: block;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
@@ -297,6 +314,86 @@ html, body {
 .card .subhead {
   margin: 20px 0 6px;
 }
+
+/* The security-lock screens: the code form and the action confirmation.
+   Both reuse .shell, .card, .btn and the dashboard's own wordmark, so the only
+   things added here are the card width and the centring. */
+.lock-note { text-align: center; }
+.lock-note .kv { justify-items: center; }
+.lock-note .kv > div { justify-content: center; }
+
+/* The wordmark above a lock screen, matching the dashboard header. */
+.lock-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.lock-brand h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* One column, centred, never wider than a form needs. */
+.lock-card {
+  max-width: 420px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.code-input {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  color: var(--text);
+  width: 100%;
+  max-width: 320px;
+  display: block;
+  /* The field is a plain text box so no password manager can save it; this is
+   * what makes it read as a secret anyway. */
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+.code-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The button sits under the field and spans it, instead of hugging the left
+ * edge of a full-width row. */
+.lock-card > .code-input { max-width: none; }
+.lock-card .row { margin-top: 16px; flex-wrap: nowrap; }
+.lock-card .row > .btn { flex: 1 1 0; width: auto; }
+
+/* Confirm and Cancel share the row evenly. */
+.lock-card .lock-pair > .btn { flex: 1 1 0; width: auto; }
+
+/* Reserved space for the error line and the countdown, so showing a message
+ * never moves the card. */
+.lock-note-line { min-height: 20px; margin-top: 12px; }
+
+/* The lock card's code fields stack label-over-input rather than sharing a
+   row, because three of them side by side squeeze each one. */
+#card-lock .kv > div { display: block; margin-bottom: 12px; }
+#card-lock .kv dt { margin-bottom: 6px; }
+#card-lock .kv dd { text-align: left; margin: 0; }
+#card-lock .code-input { max-width: none; }
+/* Three actions side by side squeeze a card this narrow into wrapped labels,
+   so they stack at the card's full width instead, like the Unlock button. */
+#card-lock .row { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
+#card-lock .row > .btn { flex: 0 0 auto; width: 100%; }
+
+/* The screen shown once the server stops answering. It reuses .shell and
+   .card, so the only thing new here is the centring. */
+
+/* The screen shown once the server stops answering. It reuses .shell and
+   .card, so the only thing new here is the centring. */
+.closed-note { text-align: center; }
+.closed-note h1 { margin: 0 0 8px; font-size: 22px; font-weight: 700; }
 
 /* ---- Footer ---- */
 .foot {

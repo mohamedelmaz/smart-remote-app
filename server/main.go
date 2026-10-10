@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -90,6 +91,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// ---- Security lock (optional, off unless a code has been set) --------
+	settingsPath := filepath.Join(configDir, "settings.json")
+	settings, settingsCorrupt := remote.LoadSettings(settingsPath, logger)
+	_ = settingsCorrupt // LoadSettings already logged and moved the file aside
+	lock := remote.NewLock(settingsPath, settings, logger)
+
 	// ---- Macros ----------------------------------------------------------
 	macros, err := remote.NewMacroStore(filepath.Join(configDir, "macros.json"))
 	if err != nil {
@@ -127,6 +134,8 @@ func main() {
 		BlockFile: filepath.Join(configDir, "blocklist.json"),
 	})
 
+	srv.SetLock(lock)
+
 	responder := remote.NewMDNSResponder(
 		remote.SanitizeLabel(*deviceName),
 		remote.HostLabel(),
@@ -161,7 +170,14 @@ func main() {
 	bar := strings.Repeat("=", 58)
 	logger.Printf("%s", bar)
 	logger.Printf(" Smart Remote is running")
-	logger.Printf("   PIN        : %s   (also shown on the dashboard)", auth.Pin())
+	// While the security lock is on the PIN is not written to the log, which
+	// is world-readable next to the executable. The tray hides it too. Old
+	// lines from earlier runs are left exactly as they were written.
+	if lock.Enabled() {
+		logger.Printf("   PIN        : hidden (lock on)")
+	} else {
+		logger.Printf("   PIN        : %s   (also shown on the dashboard)", auth.Pin())
+	}
 	logger.Printf("   Address    : %s:%d", host, srv.Port())
 	logger.Printf("   Dashboard  : http://%s:%d", host, srv.Port())
 	logger.Printf("   Macros     : %d loaded", len(macros.List()))
@@ -213,30 +229,61 @@ func main() {
 		}
 	}()
 
+// ---- Shared owner actions ---------------------------------------------
+	// These are defined once and referenced from both the tray and the locked
+	// dashboard, so the two can never drift apart.
+	applyServing := func(activate bool) bool {
+		srv.SetServing(activate)
+		return srv.IsServing()
+	}
+
+	regeneratePIN := func() string {
+		newPin, err := auth.Regenerate()
+		if err != nil {
+			logger.Printf("WARNING: could not regenerate PIN: %v", err)
+			return ""
+		}
+		return newPin
+	}
+
+	// The dashboard may ask for these only with a valid session and only with
+	// a name from the server's allow-list. The implementation is the same code
+	// the tray runs, not a second copy of it.
+	lock.SetActions(func(do string) (any, error) {
+		switch do {
+		case "newpin":
+			pin := regeneratePIN()
+			if pin == "" {
+				return nil, errors.New("could not regenerate the PIN")
+			}
+			return map[string]any{"pin": pin}, nil
+		case "toggle":
+			return map[string]any{"serving": applyServing(!srv.IsServing())}, nil
+		case "quit":
+			requestQuit("dashboard")
+			return map[string]any{"closing": true}, nil
+		}
+		return nil, errors.New("unknown action")
+	})
+	lock.SetOnChange(remote.SetTrayLockState)
+
 	remote.RunTray(remote.TrayConfig{
 		PIN:          auth.Pin(),
 		Address:      fmt.Sprintf("%s:%d", host, srv.Port()),
 		DashboardURL: dashboardURL,
 		Logger:       logger,
 		Serving:      true,
-		OnToggleServing: func(activate bool) bool {
-			srv.SetServing(activate)
-			return srv.IsServing()
-		},
-		OnQuit: func() { requestQuit("tray") },
-		OnRegenerate: func() string {
-			newPin, err := auth.Regenerate()
-			if err != nil {
-				logger.Printf("WARNING: could not regenerate PIN: %v", err)
-				return ""
+		LockEnabled:  lock.Enabled(),
+		OnOpenLock: func(enabled bool) string {
+			if enabled {
+				return dashboardURL + "#unlock"
 			}
-			return newPin
+			return dashboardURL + "#lock"
 		},
-		// The registry is read here rather than in the tray so the log records
-		// every change and a failed write is explained to the user, and the
-		// state handed back is re-read from the registry so the menu tick can
-		// never claim something that did not happen.
-		StartupEnabled: remote.StartupEnabled(),
+		OnToggleServing: applyServing,
+		OnQuit:          func() { requestQuit("tray") },
+		OnRegenerate:    regeneratePIN,
+		StartupEnabled:  remote.StartupEnabled(),
 		OnToggleStartup: func(enabled bool) bool {
 			if err := remote.SetStartup(enabled, logger); err != nil {
 				logger.Printf("WARNING: startup change failed: %v", err)

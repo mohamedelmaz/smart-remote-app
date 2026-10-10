@@ -32,7 +32,11 @@ const (
 
 	// GetDeviceCaps indices used by DeviceInfo.
 	capBitsPixel = 12
-	capVRefresh  = 11
+	// VREFRESH is 116. It was 11, which is not a refresh-rate capability at
+	// all (8 is HORZRES, 10 is VERTRES, 12 is BITSPIXEL, 11 is unused), so
+	// GetDeviceCaps answered 0 on every machine and the dashboard printed a
+	// permanent "0Hz" beside a perfectly good resolution.
+	capVRefresh = 116
 )
 
 // BITMAPINFOHEADER from wingdi.h.

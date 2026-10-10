@@ -28,8 +28,8 @@
 // windres does not run the C preprocessor unless --preprocessor is given, so an
 // #ifdef/#else block is a syntax error rather than a conditional.
 1 VERSIONINFO
-FILEVERSION     1,0,0,0
-PRODUCTVERSION  1,0,0,0
+FILEVERSION     1,0,3,0
+PRODUCTVERSION  1,0,3,0
 // FILEFLAGSMASK is spelled numerically rather than as VS_FFI_FILEFLAGSMASK.
 // GNU windres does not preload the Windows VERSIONINFO constants the way
 // MSVC's rc.exe does, so the symbolic name is reported as a syntax error
@@ -56,12 +56,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "elmamo"
             VALUE "FileDescription",  "Smart Remote Control"
-            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "FileVersion",      "1.0.3.0"
             VALUE "InternalName",     "smart-remote-server"
             VALUE "LegalCopyright",   "Copyright (c) 2026 elmamo"
             VALUE "OriginalFilename", "smart-remote-server.exe"
             VALUE "ProductName",      "Smart Remote Control"
-            VALUE "ProductVersion",   "1.0.0.0"
+            VALUE "ProductVersion",   "1.0.3.0"
         END
     END
     BLOCK "VarFileInfo"

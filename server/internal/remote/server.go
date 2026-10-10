@@ -66,7 +66,18 @@ type Server struct {
 	// blockCorrupt remembers a corrupt block file so the dashboard can warn
 	// instead of silently showing an empty list.
 	blockCorrupt bool
+
+	// lock is the optional security lock. Nil in tests that do not use it,
+	// and every check tolerates that: an absent lock is an absent lock.
+	lock *Lock
 }
+
+// SetLock attaches the security lock.
+func (s *Server) SetLock(l *Lock) { s.lock = l }
+
+// Lock exposes the lock so the entry point can wire its actions and the tray
+// hook. It may be nil.
+func (s *Server) Lock() *Lock { return s.lock }
 
 // SetMDNS attaches a discovery responder to the server.
 func (s *Server) SetMDNS(m *MDNSResponder) { s.mdns = m }
@@ -145,23 +156,56 @@ func NewServer(opts ServerOptions) *Server {
 	return srv
 }
 
+// guard hides a handler behind the security lock.
+//
+// It is a pass-through: when the lock is off, when the caller is not on this
+// machine, or when the request carries a valid session, the original handler
+// runs untouched and writes exactly the bytes it always did. Only an unlocked
+// local request to a locked server is refused.
+//
+// The wrapper deliberately sits here in Handler rather than inside each
+// handler, so no connection handler body is touched.
+func (s *Server) guard(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.lock.blocks(r) {
+			writeLocked(w)
+			return
+		}
+		h(w, r)
+	}
+}
+
 // Handler builds the HTTP mux with every API route.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
+	// Always open. probeServer depends on it, and it exposes nothing.
 	mux.HandleFunc("/healthz", s.handleHealth)
-	mux.HandleFunc("/api/panel/status", s.handleStatus)
-	mux.HandleFunc("/api/net", s.handleNet)
-	mux.HandleFunc("/api/macros", s.handleMacros)
-	mux.HandleFunc("/api/macros/", s.handleMacroByID)
-	mux.HandleFunc("/api/pin", s.handlePin)
-	mux.HandleFunc("/api/devices/block", s.handleBlockDevice)
-	mux.HandleFunc("/api/devices/unblock", s.handleUnblockDevice)
+
+	// The security lock's own endpoints. They must stay reachable while the
+	// rest of the dashboard is shut out, so they are not guarded.
+	mux.HandleFunc("/api/lock/state", s.handleLockState)
+	mux.HandleFunc("/api/lock/unlock", s.handleLockUnlock)
+	mux.HandleFunc("/api/lock/logout", s.handleLockLogout)
+	mux.HandleFunc("/api/lock/set", s.handleLockSet)
+	mux.HandleFunc("/api/lock/disable", s.handleLockDisable)
+	mux.HandleFunc("/api/lock/action", s.handleLockAction)
+
+	// Everything below is what the lock hides from a local browser.
+	mux.HandleFunc("/api/panel/status", s.guard(s.handleStatus))
+	mux.HandleFunc("/api/net", s.guard(s.handleNet))
+	mux.HandleFunc("/api/macros", s.guard(s.handleMacros))
+	mux.HandleFunc("/api/macros/", s.guard(s.handleMacroByID))
+	mux.HandleFunc("/api/pin", s.guard(s.handlePin))
+	mux.HandleFunc("/api/devices/block", s.guard(s.handleBlockDevice))
+	mux.HandleFunc("/api/devices/unblock", s.guard(s.handleUnblockDevice))
+	mux.HandleFunc("/api/screencap-test", s.guard(s.handleScreencapTest))
+	mux.HandleFunc("/ws", s.guard(s.handleWS))
+
+	// Unchanged: the streams keep their own pairing-PIN gate.
 	mux.HandleFunc("/screen", s.handleScreen)
 	mux.HandleFunc("/webcam", s.handleWebcam)
 	mux.HandleFunc("/api/cameras", s.handleCameras)
-	mux.HandleFunc("/api/screencap-test", s.handleScreencapTest)
-	mux.HandleFunc("/ws", s.handleWS)
 
 	// The dashboard is embedded, so the binary stays dependency free and the
 	// panel assets can never be missing at runtime. The root serves the
@@ -172,12 +216,21 @@ func (s *Server) Handler() http.Handler {
 	return s.withCORS(s.withLogging(mux))
 }
 
-// withCORS allows the dashboard to be loaded from another origin during
-// development (for example flutter run -d chrome on a different port).
+// withCORS answers cross-origin reads only for the same origin.
+//
+// It used to echo back whatever Origin arrived, which let any page the owner
+// happened to have open read /api/panel status - and therefore the pairing PIN
+// - from their own browser. Same-origin is all the embedded dashboard needs.
+//
+// The one cost: `flutter run -d chrome` serves the app from a different port,
+// so that development shortcut no longer gets an Allow-Origin header and the
+// browser will block it. Nothing the shipped app does depends on this: the
+// dashboard is served from this same listener, and the phone sends no Origin
+// at all because it is a native client.
 func (s *Server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if origin != "" && sameOrigin(r) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
