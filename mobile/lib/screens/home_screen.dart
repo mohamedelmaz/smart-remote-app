@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../l10n/strings.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import 'deck_screen.dart';
@@ -172,7 +171,7 @@ class StatusHeader extends ConsumerWidget {
                 onPressed: link?.retryNow,
               ),
               IconButton(
-                tooltip: T.of(context).renameDevice,
+                tooltip: 'Rename this phone',
                 icon: const Icon(Icons.edit_outlined, size: 20),
                 color: AppColors.textSecondary,
                 onPressed: () => showRenameDialog(context, ref),
@@ -200,32 +199,31 @@ class StatusHeader extends ConsumerWidget {
 /// it on close, so no state leaks past the dialog's lifetime.
 Future<void> showRenameDialog(BuildContext context, WidgetRef ref) async {
   final notifier = ref.read(pairingProvider.notifier);
-  final t = T.of(context);
   final ctrl = TextEditingController(text: notifier.deviceName);
   try {
     final save = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(t.renameDevice),
+        title: const Text('Rename this phone'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           autocorrect: false,
           maxLength: 64,
-          decoration: InputDecoration(
-            labelText: t.deviceNameLabel,
-            hintText: t.deviceNameHint,
+          decoration: const InputDecoration(
+            labelText: 'Device name (optional)',
+            hintText: "e.g. Ahmed's phone",
             counterText: '',
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(t.close),
+            child: const Text('Close'),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(t.save),
+            child: const Text('Save'),
           ),
         ],
       ),

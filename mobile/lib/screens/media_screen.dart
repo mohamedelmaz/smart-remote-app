@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/commands.dart';
 import '../core/remote_link.dart';
-import '../l10n/strings.dart';
 import '../state/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
@@ -20,14 +19,12 @@ import 'pairing_screen.dart';
 class _Shortcut {
   const _Shortcut({
     required this.en,
-    required this.ar,
     required this.icon,
     required this.mods,
     required this.key,
   });
 
   final String en;
-  final String ar;
   final IconData icon;
   final List<String> mods;
   final String key;
@@ -47,91 +44,78 @@ class _Shortcut {
 const List<_Shortcut> _shortcutSpecs = [
   _Shortcut(
     en: 'Show Desktop',
-    ar: 'إظهار سطح المكتب',
     icon: Icons.desktop_windows,
     mods: ['win'],
     key: 'd',
   ),
   _Shortcut(
     en: 'File Explorer',
-    ar: 'مستكشف الملفات',
     icon: Icons.folder_open,
     mods: ['win'],
     key: 'e',
   ),
   _Shortcut(
     en: 'Lock PC',
-    ar: 'قفل الجهاز',
     icon: Icons.lock,
     mods: ['win'],
     key: 'l',
   ),
   _Shortcut(
     en: 'Switch Apps',
-    ar: 'تبديل التطبيقات',
     icon: Icons.swap_horiz,
     mods: ['alt'],
     key: 'tab',
   ),
   _Shortcut(
     en: 'Task Manager',
-    ar: 'مدير المهام',
     icon: Icons.speed,
     mods: ['ctrl', 'shift'],
     key: 'esc',
   ),
   _Shortcut(
     en: 'Snipping Tool',
-    ar: 'أداة القص',
     icon: Icons.crop_free,
     mods: ['win', 'shift'],
     key: 's',
   ),
   _Shortcut(
     en: 'Copy',
-    ar: 'نسخ',
     icon: Icons.content_copy,
     mods: ['ctrl'],
     key: 'c',
   ),
   _Shortcut(
     en: 'Paste',
-    ar: 'لصق',
     icon: Icons.content_paste,
     mods: ['ctrl'],
     key: 'v',
   ),
   _Shortcut(
     en: 'Cut',
-    ar: 'قص',
     icon: Icons.content_cut,
     mods: ['ctrl'],
     key: 'x',
   ),
   _Shortcut(
     en: 'Undo',
-    ar: 'تراجع',
     icon: Icons.undo,
     mods: ['ctrl'],
     key: 'z',
   ),
   _Shortcut(
     en: 'Redo',
-    ar: 'إعادة',
     icon: Icons.redo,
     mods: ['ctrl'],
     key: 'y',
   ),
   _Shortcut(
     en: 'Find',
-    ar: 'بحث',
     icon: Icons.search,
     mods: ['ctrl'],
     key: 'f',
   ),
   _Shortcut(
     en: 'Refresh',
-    ar: 'تحديث',
     icon: Icons.refresh,
     // F5 needs no modifier. It is sent as a chord with an empty modifier list
     // rather than as a tap so every shortcut goes through one code path - and
@@ -141,70 +125,60 @@ const List<_Shortcut> _shortcutSpecs = [
   ),
   _Shortcut(
     en: 'Settings',
-    ar: 'الإعدادات',
     icon: Icons.settings,
     mods: ['win'],
     key: 'i',
   ),
   _Shortcut(
     en: 'Run',
-    ar: 'تشغيل',
     icon: Icons.terminal,
     mods: ['win'],
     key: 'r',
   ),
   _Shortcut(
     en: 'Quick Assist',
-    ar: 'المساعدة السريعة',
     icon: Icons.support_agent,
     mods: ['win'],
     key: 'q',
   ),
   _Shortcut(
     en: 'Project',
-    ar: 'المشروع',
     icon: Icons.video_camera_front,
     mods: ['ctrl'],
     key: 'p',
   ),
   _Shortcut(
     en: 'Close Window',
-    ar: 'إغلاق النافذة',
     icon: Icons.close,
     mods: ['alt'],
     key: 'f4',
   ),
   _Shortcut(
     en: 'Rename',
-    ar: 'إعادة تسمية',
     icon: Icons.drive_file_rename_outline,
     mods: [],
     key: 'f2',
   ),
   _Shortcut(
     en: 'Save',
-    ar: 'حفظ',
     icon: Icons.save,
     mods: ['ctrl'],
     key: 's',
   ),
   _Shortcut(
     en: 'Search',
-    ar: 'بحث',
     icon: Icons.search,
     mods: ['win'],
     key: 's',
   ),
   _Shortcut(
     en: 'Action Center',
-    ar: 'مركز الإشعارات',
     icon: Icons.notifications,
     mods: ['win'],
     key: 'a',
   ),
   _Shortcut(
     en: 'Active Apps',
-    ar: 'التطبيقات المفتوحة',
     icon: Icons.apps,
     mods: ['win'],
     key: 'tab',
@@ -305,17 +279,13 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
     // `enabled`, so promoting once here removes the null check from each
     // closure without weakening type safety anywhere.
     final link = enabled ? remote : null;
-    // Watching the language here is what makes a language change repaint this
-    // screen. A cached field would be initialised once and keep showing the
-    // previous language until the app was restarted.
-    final t = T(ref.watch(langProvider));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppTokens.gap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionTitle(label: t.mediaKeys),
+          SectionTitle(label: 'Media keys'),
           const SizedBox(height: AppTokens.gapSmall),
           GlassPanel(
             child: Column(
@@ -379,7 +349,7 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
           ),
 
           const SizedBox(height: 24),
-          SectionTitle(label: t.volume),
+          SectionTitle(label: 'Volume'),
           const SizedBox(height: AppTokens.gapSmall),
           GlassPanel(
             child: Row(
@@ -430,7 +400,7 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
           ),
 
           const SizedBox(height: 24),
-          SectionTitle(label: t.desktopShortcuts),
+          SectionTitle(label: 'Desktop shortcuts'),
           const SizedBox(height: AppTokens.gapSmall),
           // These send real key chords rather than shell macros.
           //
@@ -446,12 +416,12 @@ class _MediaScreenState extends ConsumerState<MediaScreen> {
               children: [
                 for (final s in _shortcutSpecs)
                   RemoteButton(
-                    label: t.text(s.en, s.ar),
+                    label: s.en,
                     icon: s.icon,
                     onPressed: enabled
                         ? () => _run(
                               () => link!.chord(s.mods, s.key),
-                              success: t.text(s.en, s.ar),
+                              success: s.en,
                             )
                         : null,
                   ),

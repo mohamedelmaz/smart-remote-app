@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'l10n/strings.dart';
 import 'screens/home_screen.dart';
 import 'screens/pairing_screen.dart';
 import 'state/providers.dart';
@@ -25,28 +24,18 @@ void main() {
 
 /// The Smart Remote application.
 ///
-/// The locale is watched from [langProvider] rather than left to the platform,
-/// because the app stores its own language choice and offers an in-app toggle.
-/// Building the [Directionality] here as well is what makes Arabic lay out
-/// right-to-left: Flutter infers direction from the active locale, so a locale
-/// the MaterialApp does not know about would silently render left-to-right.
-class SmartRemoteApp extends ConsumerWidget {
+/// The UI is English-only and left-to-right: no locale is set and no
+/// [Directionality] is built, so Flutter lays every screen out LTR from the
+/// platform default and nothing in the app can switch it.
+class SmartRemoteApp extends StatelessWidget {
   const SmartRemoteApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lang = ref.watch(langProvider);
-
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Smart Remote',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      locale: localeFor(lang),
-      supportedLocales: const [Locale('en'), Locale('ar')],
-      // Without this the app bundles Material's built-in English translations,
-      // which would surface in system dialogs while the app's own text is
-      // Arabic. Pinning the delegates to nil keeps every string in one place.
-      localizationsDelegates: const [],
       home: const RootRouter(),
     );
   }

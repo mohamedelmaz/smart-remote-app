@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../l10n/strings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
 import 'pairing_screen.dart' show SectionTitle;
@@ -11,7 +9,7 @@ import 'pairing_screen.dart' show SectionTitle;
 /// Kept in step with `version:` in pubspec.yaml and `AppVersion` in
 /// server/internal/remote/brand.go. It is a literal rather than a read of the
 /// pubspec because the pubspec is not available to Dart code at runtime.
-const String kAppVersion = '1.0.2';
+const String kAppVersion = '1.0.3';
 
 /// The author shown in the About sheet.
 ///
@@ -70,22 +68,19 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
-/// "How to use" and "About", plus the language toggle.
+/// "How to use" and "About".
 ///
 /// The setup steps are deliberately the same three the server's own dashboard
 /// prints, because that is where the user is looking when the PIN is fresh in
 /// their hand and the phone is asking for an address.
-class InfoSheet extends ConsumerWidget {
+class InfoSheet extends StatelessWidget {
   const InfoSheet({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lang = ref.watch(langProvider);
-    final t = T(lang);
-
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.info),
+        title: const Text('Info'),
         backgroundColor: AppColors.background,
         elevation: 0,
       ),
@@ -104,7 +99,7 @@ class InfoSheet extends ConsumerWidget {
             const SizedBox(height: AppTokens.gapSmall),
             Center(
               child: Text(
-                '${t.version} $kAppVersion',
+                'Version $kAppVersion',
                 style: monoStyle(
                   12,
                   FontWeight.w400,
@@ -112,46 +107,18 @@ class InfoSheet extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: AppTokens.gap),
-
-            // --- Language ---
-            SectionTitle(label: t.language),
-            const SizedBox(height: AppTokens.gapSmall),
-            GlassPanel(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _LangChoice(
-                      label: t.english,
-                      code: 'EN',
-                      selected: !lang.isRtl,
-                      onTap: () =>
-                          ref.read(langProvider.notifier).set(AppLang.en),
-                    ),
-                  ),
-                  const SizedBox(width: AppTokens.gapSmall),
-                  Expanded(
-                    child: _LangChoice(
-                      label: t.arabic,
-                      code: 'ع',
-                      selected: lang.isRtl,
-                      onTap: () =>
-                          ref.read(langProvider.notifier).set(AppLang.ar),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: AppTokens.gap * 1.5),
             // --- How to use ---
-            SectionTitle(label: t.howToUse),
+            const SectionTitle(label: 'How to use'),
             const SizedBox(height: AppTokens.gapSmall),
             GlassPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    t.howToUseBody,
+                    '1. Run the server on the computer.\n'
+                    '2. Make sure both devices are connected to the same Wi-Fi network.\n'
+                    '3. Enter the IP address and PIN to connect.',
                     style: interStyle(
                       13,
                       FontWeight.w400,
@@ -164,16 +131,19 @@ class InfoSheet extends ConsumerWidget {
             const SizedBox(height: AppTokens.gap * 1.5),
 
             // --- About ---
-            SectionTitle(label: t.aboutTitle),
+            const SectionTitle(label: 'About'),
             const SizedBox(height: AppTokens.gapSmall),
             GlassPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(t.aboutBody, style: interStyle(13, FontWeight.w400)),
+                  Text(
+                    'Smart Remote Control v$kAppVersion. Developed by elmamo. '
+                    'A professional, zero-latency LAN remote control solution.',
+                    style: interStyle(13, FontWeight.w400)),
                   const SizedBox(height: AppTokens.gapSmall),
                   Text(
-                    '${t.developedBy}: $kDeveloper',
+                    'Developed by: $kDeveloper',
                     style: monoStyle(
                       13,
                       FontWeight.w700,
@@ -182,7 +152,7 @@ class InfoSheet extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    t.license,
+                    'Released under the MIT License.',
                     style: interStyle(
                       12,
                       FontWeight.w400,
@@ -193,59 +163,6 @@ class InfoSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: AppTokens.gap),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One tappable language option.
-class _LangChoice extends StatelessWidget {
-  const _LangChoice({
-    required this.label,
-    required this.code,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final String code;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppTokens.radiusSmall),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.accent.withValues(alpha: 0.16)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppTokens.radiusSmall),
-          border: Border.all(
-            color: selected ? AppColors.accent : AppColors.glassBorder,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(code, style: monoStyle(14, FontWeight.w700)),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                style: interStyle(
-                  13,
-                  FontWeight.w600,
-                  color: selected ? AppColors.accent : AppColors.textPrimary,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
           ],
         ),
       ),

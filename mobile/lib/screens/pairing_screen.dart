@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../l10n/strings.dart';
 import '../models/models.dart';
 import '../models/pairing.dart';
 import '../state/discovery.dart';
@@ -259,10 +258,10 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
                       autocorrect: false,
                       maxLength: 64,
                       style: interStyle(15, FontWeight.w400),
-                      decoration: InputDecoration(
-                        labelText: T.of(context).deviceNameLabel,
-                        hintText: T.of(context).deviceNameHint,
-                        prefixIcon: const Icon(Icons.smartphone_outlined),
+                      decoration: const InputDecoration(
+                        labelText: 'Device name (optional)',
+                        hintText: "e.g. Ahmed's phone",
+                        prefixIcon: Icon(Icons.smartphone_outlined),
                         counterText: '',
                       ),
                     ),

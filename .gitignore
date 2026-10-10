@@ -123,3 +123,14 @@ test_*.txt
 diff_*.txt
 mutant_*.txt
 status_*.txt
+
+# Captured release-inspection output (version/signature/asset dumps).
+# Listed by explicit name only - a broad "*.txt" would also hide the tracked
+# documentation and per-file scratch notes above.
+apkver*.txt
+check*.txt
+ghrel*.txt
+gitdiff*.txt
+relbuild*.txt
+sig*.txt
+ver_*.txt
