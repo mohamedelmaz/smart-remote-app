@@ -16,6 +16,13 @@ import '../theme/app_theme.dart';
 /// hands loose constraints to its children and would prevent the expansion).
 /// The [Center] sits *inside* the viewer so the 1x layout stays pixel-equal
 /// to the previous plain AspectRatio view.
+///
+/// Layout: every frame is fitted to the available space with its own aspect
+/// ratio preserved ([Center] + [AspectRatio] + `BoxFit.contain`), so a
+/// 1680x1050 desktop is drawn larger than a 1920x1080 one rather than being
+/// pinned to the width the first frame happened to use. The zoom transform is
+/// kept across frames of the same ratio, and reset when the ratio changes -
+/// see [didUpdateWidget].
 class ZoomableFrame extends StatefulWidget {
   const ZoomableFrame({super.key, required this.frame, this.maxScale = 6});
 
@@ -33,6 +40,11 @@ class _ZoomableFrameState extends State<ZoomableFrame>
   Animation<Matrix4>? _tween;
   Offset _tapAt = Offset.zero;
 
+  // Set while the controller is written to programmatically from
+  // didUpdateWidget. That write fires the listener, and the listener calls
+  // setState, which Flutter rejects while the frame is still building.
+  bool _suppressRebuild = false;
+
   bool get _zoomed => _controller.value.getMaxScaleOnAxis() > 1.01;
 
   @override
@@ -44,7 +56,38 @@ class _ZoomableFrameState extends State<ZoomableFrame>
         final t = _tween;
         if (t != null) _controller.value = t.value;
       });
-    _controller.addListener(() => setState(() {}));
+    _controller.addListener(() {
+      if (!_suppressRebuild) setState(() {});
+    });
+  }
+
+  // A frame whose aspect ratio differs from the previous one is a different
+  // shape, not merely a new picture of the same one. Keeping the old transform
+  // across that change leaves the picture offset and cropped by whatever the
+  // previous zoom and pan happened to be, and the user has no gesture that
+  // restores it because the pill's "reset" is the only thing that can.
+  //
+  // Only the ratio matters here. Every frame arrives at a new size - the same
+  // desktop simply produces another JPEG - so resetting on size alone would
+  // throw away the user's zoom fifteen times a second.
+  @override
+  void didUpdateWidget(covariant ZoomableFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldFrame = oldWidget.frame;
+    final newFrame = widget.frame;
+    if (oldFrame.width <= 0 || oldFrame.height <= 0) return;
+    if (newFrame.width <= 0 || newFrame.height <= 0) return;
+
+    final oldAspect = oldFrame.width / oldFrame.height;
+    final newAspect = newFrame.width / newFrame.height;
+    if ((oldAspect - newAspect).abs() < 0.0001) return;
+    if (!_zoomed) return;
+
+    _anim.stop();
+    _tween = null;
+    _suppressRebuild = true;
+    _controller.value = Matrix4.identity();
+    _suppressRebuild = false;
   }
 
   @override

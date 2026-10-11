@@ -4,7 +4,7 @@ name: smart_remote
 # controller-capture dependency is wired up), so it is not claimed here.
 description: "Control your Windows PC from your phone: touchpad, media, macros, keyboard, screen view and voice."
 publish_to: 'none'
-version: 1.0.3+4
+version: 1.0.4+5
 
 # Shown in the About sheet. Kept in sync with server/internal/remote/brand.go
 # so the phone and the PC never disagree about who ships this.

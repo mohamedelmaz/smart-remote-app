@@ -9,7 +9,7 @@ import 'pairing_screen.dart' show SectionTitle;
 /// Kept in step with `version:` in pubspec.yaml and `AppVersion` in
 /// server/internal/remote/brand.go. It is a literal rather than a read of the
 /// pubspec because the pubspec is not available to Dart code at runtime.
-const String kAppVersion = '1.0.3';
+const String kAppVersion = '1.0.4';
 
 /// The author shown in the About sheet.
 ///

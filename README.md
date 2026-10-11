@@ -3,6 +3,10 @@
 Professional zero-latency LAN remote control: a Windows tray server plus a
 Flutter phone app (touchpad, keyboard, screen view, macros, voice, webcam).
 
+## Requirements
+
+- Windows 10 or 11, 64-bit
+
 ## Layout
 
 - `server/` — Go tray server + embedded web dashboard. Build with
