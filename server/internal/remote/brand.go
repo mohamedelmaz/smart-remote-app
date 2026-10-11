@@ -11,7 +11,7 @@ import (
 // version changes only when the wire format does, whereas this changes with
 // every release. The mobile app shows this in its About sheet, so it must match
 // the version in mobile/pubspec.yaml.
-const AppVersion = "1.0.3"
+const AppVersion = "1.0.4"
 
 // Developer is the author shown in the server's own version reporting.
 //

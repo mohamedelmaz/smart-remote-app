@@ -163,7 +163,7 @@ func (l *Lock) isLocal(r *http.Request) bool {
 
 // ownAddress reports whether ip is one of this machine's own addresses, which
 // is what makes the dashboard locked even when it was opened as
-// http://192.168.1.37:9520 rather than through loopback.
+// http://192.168.x.x:9520 rather than through loopback.
 func (l *Lock) ownAddress(ip net.IP) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

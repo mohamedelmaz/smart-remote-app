@@ -236,9 +236,16 @@ func ServeScreenStream(w http.ResponseWriter, r *http.Request, settings ScreenSt
 	lock *ViewerLock, logger *log.Logger) {
 
 	serveMJPEG(w, r, settings, lock, logger, "screen",
-		func(quality int) (FrameSource, error) {
-			return NewCapturer(CapturerOptions{Quality: quality})
+func(quality int) (FrameSource, error) {
+		return NewCapturer(CapturerOptions{
+			Quality:  quality,
+			MaxWidth: DefaultMaxFrameWidth,
+			OnResize: func(oldW, oldH, newW, newH int32) {
+				logger.Printf("capture: desktop resized %dx%d -> %dx%d, "+
+					"rebuilding capture surfaces", oldW, oldH, newW, newH)
+			},
 		})
+	})
 }
 
 // ServeWebcamStream streams a camera until the client disconnects.

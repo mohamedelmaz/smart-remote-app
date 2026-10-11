@@ -53,6 +53,13 @@ func main() {
 	// can be recovered from now that the console is gone.
 	logger := newFileLogger(remote.LogFilePath())
 
+	// A capture geometry that had to be guessed is worth saying out loud: it
+	// is the difference between "the picture is the wrong size" and "the app
+	// is broken", and only the log survives to be read afterwards.
+	remote.SetMetricsWarningLogger(func(msg string) {
+		logger.Printf("WARNING: %s", msg)
+	})
+
 	// ---- Single instance -------------------------------------------------
 	// Two servers would inject input from two sources and fight over the
 	// screen stream, so a second launch replaces the first.
@@ -80,7 +87,7 @@ func main() {
 	}
 	configDir = filepath.Join(configDir, "SmartRemote")
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		logger.Printf("FATAL: cannot create config dir %s: %v", configDir, err)
+		reportFatal(logger, fmt.Sprintf("cannot create the settings folder %s (%v)", configDir, err))
 		os.Exit(1)
 	}
 
@@ -161,7 +168,7 @@ func main() {
 	}
 
 	if err := srv.Start(); err != nil {
-		logger.Printf("FATAL: %v", err)
+		reportFatal(logger, fmt.Sprintf("the server could not start (%v)", err))
 		os.Exit(1)
 	}
 

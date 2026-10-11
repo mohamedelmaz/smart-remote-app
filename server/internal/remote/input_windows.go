@@ -607,20 +607,72 @@ func (in *Injector) MoveRelative(dx, dy int32) error {
 // unsafe case it guards against - a Go heap pointer surviving a stack move -
 // because the address belongs to neither the Go heap nor the stack.
 
-// virtualDesktop returns the virtual desktop bounds in pixels.
-func virtualDesktop() (ox, oy, w, h int32) {
+// getSystemMetricsFn is a seam for tests: the real one talks to user32, and
+// swapping it lets the fallback chain below be exercised without a display.
+var getSystemMetricsFn = getSystemMetrics
+
+// getSystemMetrics reads one SM_* metric.
+//
+// GetSystemMetrics takes an int and RETURNS an int; it never writes through a
+// pointer. The previous version here passed a pointer to a local and then
+// returned that local, discarding the call's actual return value - so it
+// answered 0 for every index, whatever the display was doing. virtualDesktop()
+// consequently never saw a real size, fell through to its 1920x1080 guess,
+// and the capturer captured 1920x1080 no matter what resolution the desktop
+// was actually at: the picture arrived pinned to the top-left corner with
+// black padding down the right and bottom.
+//
+// Note that GetDC-relative metrics are a different API (GetDeviceCaps), which
+// is why QueryDeviceInfo can read its return value the same way without ever
+// having hit this.
+func getSystemMetrics(index int) int32 {
 	proc := user32.NewProc("GetSystemMetrics")
-	var v [4]int32
-	// SM_XVIRTUALSCREEN=76, SM_YVIRTUALSCREEN=77,
-	// SM_CXVIRTUALSCREEN=78, SM_CYVIRTUALSCREEN=79
-	_, _, _ = proc.Call(76, uintptr(unsafe.Pointer(&v[0])), 0, 0)
-	_, _, _ = proc.Call(77, uintptr(unsafe.Pointer(&v[1])), 0, 0)
-	_, _, _ = proc.Call(78, uintptr(unsafe.Pointer(&v[2])), 0, 0)
-	_, _, _ = proc.Call(79, uintptr(unsafe.Pointer(&v[3])), 0, 0)
-	if v[2] <= 0 || v[3] <= 0 {
-		return 0, 0, 1920, 1080
+	v, _, _ := proc.Call(uintptr(index))
+	return int32(v)
+}
+
+// virtualDesktopFn is the seam the capture path uses. It points at
+// virtualDesktop by default and exists so a test can drive the resize logic
+// with a desktop geometry it controls.
+var virtualDesktopFn = virtualDesktop
+
+// onMetricsFallback, when set, receives a message whenever virtualDesktop has
+// to fall back to a guessed geometry.
+var onMetricsFallback = func(string) {}
+
+// SetMetricsWarningLogger routes display-metric fallbacks into the server log.
+// Without it a capture running on a guessed size is silent, which is exactly
+// the case nobody can diagnose later.
+func SetMetricsWarningLogger(fn func(string)) {
+	if fn != nil {
+		onMetricsFallback = fn
 	}
-	return v[0], v[1], v[2], v[3]
+}
+
+// virtualDesktop returns the virtual desktop bounds in pixels.
+//
+// Some sessions - a headless service, a locked console, a display driver that
+// has not finished enumerating - report a zero virtual screen. Guessing 1920x1080
+// there produced captures that were silently the wrong size, so the primary
+// display is consulted first: it is the real size in nearly every case where
+// the virtual screen is missing. Only when that also fails do we guess.
+func virtualDesktop() (ox, oy, w, h int32) {
+	ox = getSystemMetricsFn(76) // SM_XVIRTUALSCREEN
+	oy = getSystemMetricsFn(77) // SM_YVIRTUALSCREEN
+	w = getSystemMetricsFn(78)  // SM_CXVIRTUALSCREEN
+	h = getSystemMetricsFn(79)  // SM_CYVIRTUALSCREEN
+	if w > 0 && h > 0 {
+		return ox, oy, w, h
+	}
+
+	if sw, sh := getSystemMetricsFn(0), getSystemMetricsFn(1); sw > 0 && sh > 0 { // SM_CXSCREEN, SM_CYSCREEN
+		onMetricsFallback(fmt.Sprintf(
+			"virtual screen unavailable, falling back to the primary display %dx%d", sw, sh))
+		return 0, 0, sw, sh
+	}
+
+	onMetricsFallback("no display metrics available, assuming 1920x1080")
+	return 0, 0, 1920, 1080
 }
 
 // MoveAbsolute moves the cursor to a pixel coordinate in the virtual desktop

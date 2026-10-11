@@ -72,6 +72,8 @@ type Capturer struct {
 	stride int32
 
 	quality int
+	maxWidth int
+	onResize func(oldW, oldH, newW, newH int32)
 	jpegBuf *bytes.Buffer
 
 	closed bool
@@ -85,6 +87,9 @@ type CapturerOptions struct {
 	// MaxWidth downscales wider desktops to keep frame size and encode time
 	// reasonable over WiFi. 0 disables downscaling.
 	MaxWidth int
+	// OnResize, when set, is called after the geometry changed, with the old
+	// and new desktop sizes. It runs on the capture goroutine.
+	OnResize func(oldW, oldH, newW, newH int32)
 }
 
 // NewCapturer allocates GDI resources for the whole virtual desktop.
@@ -96,30 +101,45 @@ func NewCapturer(opts CapturerOptions) (*Capturer, error) {
 		opts.Quality = 70
 	}
 
-	ox, oy, w, h := virtualDesktop()
+	ox, oy, w, h := virtualDesktopFn()
 	_ = ox
 	_ = oy
 
 	c := &Capturer{
-		quality: opts.Quality,
-		width:   w,
-		height:  h,
-		stride:  w * bytesPerPx,
-		jpegBuf: new(bytes.Buffer),
+		quality:  opts.Quality,
+		maxWidth: opts.MaxWidth,
+		onResize: opts.OnResize,
+		jpegBuf:  new(bytes.Buffer),
 	}
+	if err := c.allocate(w, h); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
 
-	c.pixels = make([]byte, int(c.stride)*int(c.height))
+// allocate (re)creates the GDI surfaces for a desktop of w x h pixels.
+//
+// It is separated from NewCapturer so that a mid-stream resolution change can
+// rebuild the surfaces through exactly the same path a fresh capturer uses,
+// instead of growing a second, subtly different copy of that code.
+func (c *Capturer) allocate(w, h int32) error {
+	if w <= 0 || h <= 0 {
+		return fmt.Errorf("remote: refusing to capture %dx%d", w, h)
+	}
+	c.width = w
+	c.height = h
+	c.stride = w * bytesPerPx
 
 	screenDC, _, err := user32.NewProc("GetDC").Call(0)
 	if screenDC == 0 {
-		return nil, fmt.Errorf("remote: GetDC failed")
+		return fmt.Errorf("remote: GetDC failed")
 	}
 	c.dc = syscall.Handle(screenDC)
 
 	memDC, _, err := procCreateCompatibleDC.Call(uintptr(c.dc))
 	if memDC == 0 {
 
-		return nil, fmt.Errorf("remote: CreateCompatibleDC failed")
+		return fmt.Errorf("remote: CreateCompatibleDC failed")
 	}
 	c.memDC = syscall.Handle(memDC)
 
@@ -142,20 +162,20 @@ func NewCapturer(opts CapturerOptions) (*Capturer, error) {
 		0, 0,
 	)
 	if bmp == 0 || bits == 0 {
-		c.release()
-		return nil, fmt.Errorf("remote: CreateDIBSection failed")
+		c.freeSurfaces()
+		return fmt.Errorf("remote: CreateDIBSection failed")
 	}
 	c.bmp = syscall.Handle(bmp)
 	c.pixels = unsafe.Slice((*byte)(unsafe.Pointer(bits)), int(c.stride)*int(c.height))
 
 	old, _, err := procSelectObject.Call(uintptr(c.memDC), uintptr(c.bmp))
 	if err != syscall.Errno(0) {
-		c.release()
-		return nil, fmt.Errorf("remote: SelectObject failed: %w", err)
+		c.freeSurfaces()
+		return fmt.Errorf("remote: SelectObject failed: %w", err)
 	}
 	c.oldBmp = syscall.Handle(old)
 
-	return c, nil
+	return nil
 }
 
 // Capture grabs one frame and returns it as an encoded JPEG.
@@ -168,6 +188,10 @@ func (c *Capturer) Capture() ([]byte, error) {
 	defer c.mu.Unlock()
 	if c.closed {
 		return nil, fmt.Errorf("remote: capturer is closed")
+	}
+
+	if err := c.resizeIfChangedLocked(); err != nil {
+		return nil, err
 	}
 
 	// SRCCOPY of the whole virtual desktop into the top-down DIB.
@@ -202,11 +226,39 @@ func (c *Capturer) Capture() ([]byte, error) {
 
 	img := c.convertLocked()
 	var buf bytes.Buffer
-	buf.Grow(int(c.width) * int(c.height) / 8)
+	buf.Grow(img.Rect.Dx() * img.Rect.Dy() / 8)
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: c.quality}); err != nil {
 		return nil, fmt.Errorf("remote: jpeg encode: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+// resizeIfChangedLocked rebuilds the capture surfaces when the virtual desktop
+// changed size, so a resolution change mid-stream shows up in the next frame
+// instead of cropping to the old geometry or blacking out.
+//
+// The metrics are re-read rather than cached because a user who plugs in a
+// second monitor or changes display scaling expects the picture to follow
+// without reconnecting.
+func (c *Capturer) resizeIfChangedLocked() error {
+	_, _, w, h := virtualDesktopFn()
+	if w == c.width && h == c.height {
+		return nil
+	}
+	if w <= 0 || h <= 0 {
+		// A transient zero (a monitor mid-sleep) must not destroy a working
+		// capture; the next frame will see the real size again.
+		return nil
+	}
+	prevW, prevH := c.width, c.height
+	c.freeSurfaces()
+	if err := c.allocate(w, h); err != nil {
+		return err
+	}
+	if c.onResize != nil {
+		c.onResize(prevW, prevH, w, h)
+	}
+	return nil
 }
 
 // convertLocked converts the GDI 32-bit BGRA DIB into an image.RGBA.
@@ -233,7 +285,7 @@ func (c *Capturer) convertLocked() *image.RGBA {
 			o[x+3] = 0xFF
 		}
 	}
-	return dst
+	return scaleToMaxWidth(dst, c.maxWidth)
 }
 
 // Size reports the capture dimensions in pixels.
@@ -259,8 +311,16 @@ func (c *Capturer) Close() error {
 	}
 	c.closed = true
 
+	c.freeSurfaces()
+	return nil
+}
+
+// freeSurfaces releases the GDI handles and the pixel backing without closing
+// the capturer, so allocate can immediately build them again at a new size.
+func (c *Capturer) freeSurfaces() {
 	if c.oldBmp != 0 && c.memDC != 0 {
 		procSelectObject.Call(uintptr(uintptr(c.memDC)), uintptr(c.oldBmp))
+		c.oldBmp = 0
 	}
 	if c.bmp != 0 {
 		procDeleteObject.Call(uintptr(c.bmp))
@@ -275,7 +335,6 @@ func (c *Capturer) Close() error {
 		c.dc = 0
 	}
 	c.pixels = nil
-	return nil
 }
 
 func (c *Capturer) release() {
