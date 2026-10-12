@@ -157,15 +157,35 @@ Access is protected by the pairing PIN, and the strength of that protection shou
 be described accurately: **the PIN is a convenience for a network you trust, not a
 control against a hostile device on your network.** The PIN is not a secret held
 only between you and your phone. It is published on the local network as part of
-automatic discovery, and a number of the server's own web endpoints answer requests
-that carry no credential at all while the optional security lock is off, which is
-the default. The correct assumption is that anyone able to observe or reach this
-traffic on your network is able to read it. Treat the PIN as adequate for keeping
-casual access away on a home network, and as inadequate for anything stronger.
+automatic discovery, and it is also returned by the server's status endpoint, so
+anything able to reach the server can read it. Some of the server's web endpoints
+answer requests that carry no credential at all while the optional security lock is
+off, which is the default. The correct assumption is that anyone able to observe
+or reach this traffic on your network is able to read it. Treat the PIN as
+adequate for keeping casual access away on a home network, and as inadequate for
+anything stronger.
 
-Administrative endpoints of the web dashboard refuse requests that do not come
-from the loopback interface, so they are reachable only from the PC itself. You
-can block individual devices from the dashboard, and the block list survives
+The endpoints that can change the machine's security posture are restricted to
+this PC. Reading the lock state, unlocking, locking again, setting a code,
+turning the lock off, running a tray action (which includes regenerating the
+pairing PIN), and POST /api/pin are all refused with "only available on this PC"
+unless the request arrives from this machine: either over the loopback
+interface, or from one of this PC's own network addresses, which is what keeps
+the dashboard working when you open it as `http://192.168.x.x:9520` rather than
+through `127.0.0.1`. Another device on the network is refused whatever address
+it uses.
+
+Device management in the dashboard is under a narrower restriction still:
+blocking and unblocking a phone answers only over the loopback interface, so a
+dashboard opened as http://192.168.x.x:9520 can see the blocked list but cannot
+change it. Open it as http://127.0.0.1:9520, which is what the tray does, to use
+those buttons.
+
+Reachability is not decided from the Origin header, because that header is
+simply absent from any client that is not a browser; some of these endpoints
+additionally refuse a mismatched Origin.
+
+You can block individual devices from the dashboard, and the block list survives
 restarts.
 
 Nothing is reachable from the internet unless you deliberately forward the port on
@@ -191,12 +211,14 @@ none is committed to.
 - **GitHub Actions build.** Build on `windows-latest`, run the tests, submit the
   artefact to SignPath and wait for a manual approval before anything is signed or
   published. Described in [RELEASE_BUILD_PLAN.md](RELEASE_BUILD_PLAN.md).
-- **Stop publishing the PIN and require a session.** Stop putting the PIN into the
-  discovery advertisement and into the dashboard's status response, and require an
-  authenticated session on every API and WebSocket endpoint. The session would be
-  established when the user enters the PIN on the phone, so pairing stays as easy
-  as it is now while the PIN stops being readable by anything merely present on the
-  network.
+- **Stop publishing the PIN and require a session.** The PIN is still published in
+  the discovery advertisement and still returned by the status endpoint today, and
+  the endpoints that read or change it are still reachable without any credential
+  from this PC.
+  The plan is to stop putting it into either place and to require an authenticated
+  session on every API and WebSocket endpoint. The session would be established when
+  the user enters the PIN on the phone, so pairing stays as easy as it is now while
+  the PIN stops being readable by anything merely present on the network.
 - **Make the executable's product name match the project name.** The file
   properties currently say *Smart Remote Control* while the product is called
   *Smart Remote* everywhere else.
