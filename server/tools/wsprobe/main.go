@@ -63,8 +63,10 @@ func run(addr, pin, command, key string) error {
 	}
 	fmt.Printf("websocket upgrade to %s: OK\n", addr)
 
-	// The server pushes a hello event immediately, carrying the PIN it
-	// currently expects, so the correct PIN is never a guess.
+	// The server pushes a hello event immediately, carrying the protocol
+	// version and the id of the client that just connected. It used to carry
+	// the PIN as well; it no longer does, so the PIN still has to be supplied
+	// with -pin and is never read back off the wire here.
 	hello, err := readFrame(conn)
 	if err != nil {
 		return fmt.Errorf("reading hello: %w", err)

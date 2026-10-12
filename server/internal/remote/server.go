@@ -175,6 +175,47 @@ func (s *Server) guard(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// isLocalRequest reports whether the request arrived from this PC.
+//
+// It is deliberately the same test Lock.isLocal applies, so that what the
+// owner-only guard accepts is exactly what the lock already treated as "this
+// machine": the loopback interface, or one of this PC's own interface
+// addresses. The second case matters because a dashboard opened as
+// http://192.168.x.x:9520 is still the owner sitting at the PC, and refusing
+// it would break the lock UI and the New PIN button for no security gain -
+// a different device cannot arrive from an address this PC owns.
+//
+// RemoteAddr is the only input. No forwarded header is consulted, because any
+// header can be written by whoever is asking, and the Origin header is not
+// consulted either: it is simply absent from any client that is not a browser,
+// and sameOrigin treats an absent Origin as a pass.
+func isLocalRequest(r *http.Request) bool {
+	host := r.RemoteAddr
+	if h, _, err := splitHostPortSafe(r.RemoteAddr); err == nil && h != "" {
+		host = h
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ownAddress(ip)
+}
+
+// localOnly refuses any request that did not come from this PC. It is
+// deliberately looser than blockGuard, which is loopback-only, so that a
+// dashboard opened on the PC's own LAN address keeps its lock UI.
+func (s *Server) localOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isLocalRequest(r) {
+			s.logger.Printf("%s refused non-local caller %s", r.URL.Path, clientLabel(r))
+			writeJSON(w, http.StatusForbidden,
+				map[string]string{"error": "only available on this PC"})
+			return
+		}
+		h(w, r)
+	}
+}
+
 // Handler builds the HTTP mux with every API route.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -184,19 +225,29 @@ func (s *Server) Handler() http.Handler {
 
 	// The security lock's own endpoints. They must stay reachable while the
 	// rest of the dashboard is shut out, so they are not guarded.
-	mux.HandleFunc("/api/lock/state", s.handleLockState)
-	mux.HandleFunc("/api/lock/unlock", s.handleLockUnlock)
-	mux.HandleFunc("/api/lock/logout", s.handleLockLogout)
-	mux.HandleFunc("/api/lock/set", s.handleLockSet)
-	mux.HandleFunc("/api/lock/disable", s.handleLockDisable)
-	mux.HandleFunc("/api/lock/action", s.handleLockAction)
+	//
+	// They are, however, wrapped in localOnly: each one changes the machine's
+	// security posture, which is the owner's business and not the business of
+	// whatever else is on the network. Before this, sameOrigin was the only
+	// reachability check, and it returns true when Origin is absent
+	// (lock.go:377-379), so a plain HTTP client from anywhere on the LAN could
+	// turn the lock off or read the PIN.
+	mux.HandleFunc("/api/lock/state", s.localOnly(s.handleLockState))
+	mux.HandleFunc("/api/lock/unlock", s.localOnly(s.handleLockUnlock))
+	mux.HandleFunc("/api/lock/logout", s.localOnly(s.handleLockLogout))
+	mux.HandleFunc("/api/lock/set", s.localOnly(s.handleLockSet))
+	mux.HandleFunc("/api/lock/disable", s.localOnly(s.handleLockDisable))
+	mux.HandleFunc("/api/lock/action", s.localOnly(s.handleLockAction))
 
 	// Everything below is what the lock hides from a local browser.
 	mux.HandleFunc("/api/panel/status", s.guard(s.handleStatus))
 	mux.HandleFunc("/api/net", s.guard(s.handleNet))
 	mux.HandleFunc("/api/macros", s.guard(s.handleMacros))
 	mux.HandleFunc("/api/macros/", s.guard(s.handleMacroByID))
-	mux.HandleFunc("/api/pin", s.guard(s.handlePin))
+	// Regenerating the PIN invalidates every paired phone, so it is the
+	// owner's call alone. The phone app never calls this: regeneratePin in
+	// mobile/lib/core/server_api.dart has no callers.
+	mux.HandleFunc("/api/pin", s.localOnly(s.guard(s.handlePin)))
 	mux.HandleFunc("/api/devices/block", s.guard(s.handleBlockDevice))
 	mux.HandleFunc("/api/devices/unblock", s.guard(s.handleUnblockDevice))
 	mux.HandleFunc("/api/screencap-test", s.guard(s.handleScreencapTest))
@@ -872,10 +923,14 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.dispatch.inj.ReleaseAll()
 
 	// Ask the client to authenticate immediately so the UI can prompt.
+	//
+	// The PIN used to be carried here too, so a discovered device could pair
+	// from this frame. Nothing read it: the phone has no reader for hello at
+	// all, and the dashboard does not open a socket. It was exposure with no
+	// benefit, so the PIN is shown on the PC instead.
 	hello, _ := json.Marshal(Event{Kind: "hello", Data: map[string]any{
 		"version": ProtocolVersion,
 		"client":  client.id,
-		"pin":     s.auth.Pin(),
 	}})
 	_ = client.sendText(hello)
 

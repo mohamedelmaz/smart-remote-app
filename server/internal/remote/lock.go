@@ -23,12 +23,14 @@ import (
 // machine has to enter a code before it can read the pairing PIN, the device
 // list or the diagnostics. That is a shoulder-surfing and walk-up-to-the-PC
 // control. It is not a defence against anyone on the network, because the PIN
-// still travels in the mDNS TXT record and in the websocket hello frame, both
-// of which are unchanged here.
+// still travels in the mDNS TXT record and in the panel status response. It
+// used to travel in the websocket hello frame as well; it no longer does.
 //
-// Phones are untouched by design. "Local" means the connection actually
-// arrived from this machine, decided from the real RemoteAddr and never from a
-// header, so a request off the LAN behaves exactly as it did before.
+// Phones are untouched by design, because the phone app calls none of these
+// endpoints. "Local" means the connection actually arrived from this machine,
+// decided from the real RemoteAddr and never from a header. The lock's own
+// six endpoints and POST /api/pin are the deliberate exception: they answer the
+// owner only, so a request off the LAN no longer behaves as it did before.
 const (
 	// LockSessionCookie is the cookie an unlocked dashboard carries.
 	LockSessionCookie = "sr_session"
@@ -81,9 +83,6 @@ type Lock struct {
 
 	fails     int
 	lockUntil time.Time
-
-	localIPs []net.IP
-	localAt  time.Time
 }
 
 // NewLock prepares the lock around a loaded settings file.
@@ -158,29 +157,37 @@ func (l *Lock) isLocal(r *http.Request) bool {
 	if ip.IsLoopback() {
 		return true
 	}
-	return l.ownAddress(ip)
+	return ownAddress(ip)
 }
 
-// ownAddress reports whether ip is one of this machine's own addresses, which
-// is what makes the dashboard locked even when it was opened as
-// http://192.168.x.x:9520 rather than through loopback.
-func (l *Lock) ownAddress(ip net.IP) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+// The own-address list, shared by the lock and the owner-only guard so both
+// answer "is this address mine?" from one cached answer.
+var (
+	ownAddrMu     sync.Mutex
+	ownAddrIPs    []net.IP
+	ownAddrCached time.Time
+)
 
-	if l.localIPs == nil || l.now().Sub(l.localAt) > lockLocalCacheTTL {
+// ownAddress reports whether ip is one of this machine's own interface
+// addresses. That is what lets the dashboard work when it is opened as
+// http://192.168.x.x:9520 rather than through loopback, and the list is cached
+// briefly because the answer is consulted on every request.
+func ownAddress(ip net.IP) bool {
+	ownAddrMu.Lock()
+	defer ownAddrMu.Unlock()
+
+	if ownAddrIPs == nil || time.Since(ownAddrCached) > lockLocalCacheTTL {
 		var ips []net.IP
-		addrs, err := net.InterfaceAddrs()
-		if err == nil {
+		if addrs, err := net.InterfaceAddrs(); err == nil {
 			for _, a := range addrs {
 				if ipnet, ok := a.(*net.IPNet); ok {
 					ips = append(ips, ipnet.IP)
 				}
 			}
 		}
-		l.localIPs, l.localAt = ips, l.now()
+		ownAddrIPs, ownAddrCached = ips, time.Now()
 	}
-	for _, own := range l.localIPs {
+	for _, own := range ownAddrIPs {
 		if own.Equal(ip) {
 			return true
 		}

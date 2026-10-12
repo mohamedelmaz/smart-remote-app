@@ -162,6 +162,34 @@ func TestLockOffIsInvisible(t *testing.T) {
 	if pin := statusPin(t, rec); len(pin) != PinLength {
 		t.Errorf("lock off: local status PIN = %q, want %d digits", pin, PinLength)
 	}
+
+	// POST /api/pin is the one route in that list which is no longer reachable
+	// off this PC, so it is asserted exactly rather than merely "not 401".
+	// Turning the lock off does not relax that: the owner's PIN is the owner's
+	// business whatever the lock happens to be doing.
+	rec = f.do(http.MethodPost, "/api/pin", remoteAddr, "", nil)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("lock off: POST /api/pin from %s = %d, want 403; body=%q",
+			remoteAddr, rec.Code, rec.Body.String())
+	}
+	if got := refusalError(t, rec); got != "only available on this PC" {
+		t.Errorf("lock off: POST /api/pin from %s error = %q, want %q",
+			remoteAddr, got, "only available on this PC")
+	}
+}
+
+// refusalError reads the "error" field out of a refusal body. The owner-only
+// routes answer in JSON precisely so the dashboard can render the reason
+// instead of a parser message, and that is worth pinning down here.
+func refusalError(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("refusal is not JSON: %v (%s)", err, rec.Body.String())
+	}
+	return body.Error
 }
 
 // ---------------------------------------------------------------- test 2
@@ -196,7 +224,7 @@ func TestLockOnLocalLocked(t *testing.T) {
 	}
 
 	// The event socket must not get as far as sending its hello frame, which
-	// carries the PIN.
+	// names the client that just connected.
 	rec := f.get("/ws")
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("/ws from loopback = %d, want 401", rec.Code)
@@ -217,14 +245,18 @@ func TestLockOnLocalLocked(t *testing.T) {
 
 // ---------------------------------------------------------------- test 3
 
-// TestLockOnRemoteUntouched: a phone on the network must see exactly what it
-// saw before the lock existed, PIN included.
+// TestLockOnRemoteUntouched: a phone on the network must still see everything
+// it saw before the lock existed, PIN included.
+//
+// The exception is deliberate and is asserted on its own below: the six
+// /api/lock routes and POST /api/pin are owner-only now, so "exactly what it
+// saw before" is no longer the right thing to say about them. They are checked
+// for the exact refusal instead of being swept up in this loop.
 func TestLockOnRemoteUntouched(t *testing.T) {
 	f := newLockFixture(t, true)
 
 	paths := []struct{ method, path, body string }{
 		{http.MethodGet, "/api/panel/status", ""},
-		{http.MethodPost, "/api/pin", ""},
 		{http.MethodGet, "/api/macros", ""},
 		{http.MethodGet, "/api/macros/lock", ""},
 		{http.MethodGet, "/api/net", ""},
@@ -236,6 +268,27 @@ func TestLockOnRemoteUntouched(t *testing.T) {
 		if rec.Code == http.StatusUnauthorized {
 			t.Errorf("%s %s from the network was refused; the lock must not touch phones",
 				p.method, p.path)
+		}
+	}
+
+	ownerOnly := []struct{ method, path, body string }{
+		{http.MethodGet, "/api/lock/state", ""},
+		{http.MethodPost, "/api/lock/unlock", `{"code":"hunter2code"}`},
+		{http.MethodPost, "/api/lock/logout", ""},
+		{http.MethodPost, "/api/lock/set", `{"code":"hunter2code"}`},
+		{http.MethodPost, "/api/lock/disable", `{"code":"hunter2code"}`},
+		{http.MethodPost, "/api/lock/action", `{"do":"quit"}`},
+		{http.MethodPost, "/api/pin", ""},
+	}
+	for _, p := range ownerOnly {
+		rec := f.do(p.method, p.path, remoteAddr, p.body, nil)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("%s %s from the network = %d, want 403; body=%q",
+				p.method, p.path, rec.Code, rec.Body.String())
+		}
+		if got := refusalError(t, rec); got != "only available on this PC" {
+			t.Errorf("%s %s from the network error = %q, want %q",
+				p.method, p.path, got, "only available on this PC")
 		}
 	}
 
