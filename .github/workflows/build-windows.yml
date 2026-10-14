@@ -71,11 +71,14 @@ jobs:
           }
 
           Write-Host "windres : $windres"
-          $windresVersion = (& $windres --version | Out-String).Trim()
+          $windresVersion = (& $windres --version | Select-Object -First 1).ToString().Trim()
           Write-Host $windresVersion
 
           # Handed to the next step through the environment. Written by hand so
-          # the line endings are LF and there is no byte order mark.
+          # the line endings are LF and there is no byte order mark. Every value
+          # written here must be a single line: the runner reads this file as
+          # KEY=value commands, so an embedded newline would turn the rest of
+          # windres's copyright notice into a command and fail the step.
           $utf8NoBom = New-Object System.Text.UTF8Encoding $false
           [System.IO.File]::AppendAllText(
               $env:GITHUB_ENV,
