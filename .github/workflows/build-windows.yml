@@ -1,0 +1,219 @@
+name: Build Windows server
+
+# Manual only. This workflow produces a build and a hash for inspection; it
+# publishes nothing. There is no release creation, no signing step and no secret
+# of any kind, because none of those exist yet.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    name: Build Windows server
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: server/go.mod
+          cache: false
+
+      # windres turns winres.rc into rsrc.syso, which is what puts the icon,
+      # the manifest and the version information into the executable. A build
+      # without it still succeeds and quietly produces an unbranded binary whose
+      # file properties say nothing, so this step fails loudly instead of
+      # letting the build continue without resources.
+      - name: Print Go version and locate windres
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          go version
+
+          $candidates = @()
+          $onPath = Get-Command windres -ErrorAction SilentlyContinue
+          if ($onPath) { $candidates += $onPath.Source }
+          $candidates += 'C:\mingw64\bin\windres.exe'
+          $candidates += 'C:\msys64\mingw64\bin\windres.exe'
+          $candidates += 'C:\msys64\ucrt64\bin\windres.exe'
+
+          $windres = $candidates |
+              Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
+              Select-Object -First 1
+
+          if (-not $windres) {
+            Write-Error @"
+          windres was not found, so the Windows resources (icon, manifest and
+          version information) cannot be compiled. This build is abandoned rather
+          than producing an executable that has none of them.
+
+          Searched, in order:
+            1. windres on PATH
+            2. C:\mingw64\bin\windres.exe
+            3. C:\msys64\mingw64\bin\windres.exe
+
+          windres ships with MinGW-w64. Install it on the runner image and
+          re-run this workflow.
+          "@
+          }
+
+          Write-Host "windres : $windres"
+          $windresVersion = (& $windres --version | Out-String).Trim()
+          Write-Host $windresVersion
+
+          # Handed to the next step through the environment. Written by hand so
+          # the line endings are LF and there is no byte order mark.
+          $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+          [System.IO.File]::AppendAllText(
+              $env:GITHUB_ENV,
+              "WRES_PATH=$windres`nWRES_VERSION=$windresVersion`n",
+              $utf8NoBom)
+
+      # Identical arguments to build.ps1 step 2. The only difference is that the
+      # executable is named by absolute path, because the path was resolved and
+      # checked in the previous step.
+      - name: Compile the Windows resources
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          & $env:WRES_PATH -i winres.rc -O coff -o rsrc.syso
+
+          if (-not (Test-Path -LiteralPath 'rsrc.syso')) {
+              Write-Error 'rsrc.syso was not created, so the resources would be missing from the build.'
+          }
+          $rsrcSize = (Get-Item -LiteralPath 'rsrc.syso').Length
+          Write-Host "rsrc.syso : $rsrcSize bytes"
+
+      - name: Run the tests
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go test ./...
+
+      # -trimpath makes the binary reproducible regardless of where it was
+      # built. -H windowsgui is the flag that matters most: without it this is a
+      # console program and Windows opens a window the user cannot dismiss.
+      #   -s  strip the symbol table and debug info
+      #   -w  omit the DWARF debug sections
+      - name: Build smart-remote-app.exe
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go build -trimpath -ldflags '-s -w -H windowsgui' -o smart-remote-app.exe .
+
+      # Two checks, and the second is the important one. The subsystem is
+      # verified exactly as build.ps1 step 5 does, because -H windowsgui is
+      # silently ignored off Windows and a "successful" build that is still a
+      # console program is the bug that check exists to catch. The FileVersion
+      # check then proves the resources really were compiled in: the version can
+      # only be there if rsrc.syso was embedded, and it must match the AppVersion
+      # in brand.go with ".0" appended (AppVersion 1.0.5 means 1.0.5.0).
+      - name: Verify the PE subsystem and the embedded version
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path 'smart-remote-app.exe'))
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 0x5C)
+          if ($subsystem -ne 2) {
+              Write-Error "PE subsystem is $subsystem, expected 2 (GUI). A console window will appear."
+          }
+          Write-Host 'PE subsystem is 2 (GUI)'
+
+          $brand = Get-Content -LiteralPath 'internal\remote\brand.go' -Raw
+          if ($brand -notmatch 'const\s+AppVersion\s*=\s*"([^"]+)"') {
+              Write-Error 'Could not read AppVersion from server/internal/remote/brand.go'
+          }
+          $appVersion = $Matches[1]
+          $expectedVersion = "$appVersion.0"
+          $actualVersion = (Get-Item -LiteralPath 'smart-remote-app.exe').VersionInfo.FileVersion
+          if ($actualVersion -ne $expectedVersion) {
+              Write-Error "FileVersion is '$actualVersion' but brand.go's AppVersion '$appVersion' requires '$expectedVersion'. The resources were not embedded."
+          }
+          Write-Host "FileVersion is $actualVersion, matching AppVersion $appVersion"
+          Write-Host 'The resources are embedded.'
+
+      - name: Print the hash and write SHA256SUMS.txt
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $exe = 'smart-remote-app.exe'
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $exe).Length
+
+          Write-Host "SHA256 : $hash"
+          Write-Host "size   : $size bytes"
+
+          # Two spaces between hash and name, as sha256sum writes it. Written
+          # with explicit "\n" and no byte order mark so the file is usable as
+          # is on a Unix runner, which Set-Content would not guarantee on
+          # Windows.
+          $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+          [System.IO.File]::WriteAllText(
+              'SHA256SUMS.txt',
+              "$hash  $exe`n",
+              $utf8NoBom)
+
+      - name: Write the job summary
+        working-directory: server
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $exe = 'smart-remote-app.exe'
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $exe).Length
+
+          $brand = Get-Content -LiteralPath 'internal\remote\brand.go' -Raw
+          if ($brand -notmatch 'const\s+AppVersion\s*=\s*"([^"]+)"') {
+              Write-Error 'Could not read AppVersion from server/internal/remote/brand.go'
+          }
+          $appVersion = $Matches[1]
+          $goVersion = (go version).Trim()
+
+          $summary = @"
+          ## Build Windows server
+
+          | | |
+          | --- | --- |
+          | Commit | ``$($env:GITHUB_SHA)`` |
+          | AppVersion | $appVersion |
+          | Go | $goVersion |
+          | windres | $($env:WRES_VERSION) |
+          | Executable | $exe |
+          | Size | $size bytes |
+          | SHA256 | ``$hash`` |
+
+          This hash describes this CI build only and is not expected to match any locally built release.
+
+          "@
+
+          $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+          [System.IO.File]::AppendAllText($env:GITHUB_STEP_SUMMARY, $summary, $utf8NoBom)
+
+      # Paths are relative to the workspace, not to the working-directory the
+      # run steps used.
+      - name: Upload the executable
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smart-remote-app-windows
+          path: |
+            server/smart-remote-app.exe
+            server/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error
